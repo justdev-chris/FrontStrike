@@ -24,7 +24,6 @@ export function init() {
     }
   });
 
-  // if window loses focus while tab is held, clear it
   window.addEventListener('blur', () => {
     scoreboardHeld = false;
     keys.clear();
@@ -54,14 +53,30 @@ export function init() {
 
   document.addEventListener('pointerlockchange', () => {
     locked = document.pointerLockElement === document.body;
+    if (!locked) firing = false;
+  });
+
+  document.addEventListener('pointerlockerror', () => {
+    // browser refused the lock (usually cooldown after ESC); report it
+    locked = false;
+    window.dispatchEvent(new CustomEvent('fs-lock-failed'));
   });
 }
 
 export function lock() {
-  document.body.requestPointerLock();
+  // if we're already locked, don't spam the browser
+  if (locked) return;
+  const el = document.body;
+  const req = el.requestPointerLock();
+  if (req && typeof req.catch === 'function') {
+    req.catch(() => {
+      window.dispatchEvent(new CustomEvent('fs-lock-failed'));
+    });
+  }
 }
 
 export function unlock() {
+  if (!locked) return;
   document.exitPointerLock();
 }
 
