@@ -12,13 +12,12 @@ import * as weapons from './game/weapons.js';
 import * as hud from './ui/hud.js';
 import * as menu from './ui/menu.js';
 
-// ---- game state (client-side mirror of what server owns) ----
 export const state = {
   myId: null,
   mode: 'dm',
   mapId: null,
   phase: 'menu',
-  players: new Map(),      // id -> public player snapshot (latest)
+  players: new Map(),
   health: 100,
   alive: true,
   kills: 0,
@@ -27,7 +26,6 @@ export const state = {
   timeLeft: 0,
 };
 
-// ---- boot ----
 async function boot() {
   renderer.init();
   input.init();
@@ -41,7 +39,6 @@ async function boot() {
   });
 }
 
-// ---- network message handling ----
 export function onMessage(msg) {
   switch (msg.type) {
     case 'welcome': {
@@ -88,10 +85,14 @@ export function onMessage(msg) {
       hud.update(state);
       break;
 
-    case 'death':
+    case 'death': {
       if (msg.victim === state.myId) localPlayer.onDeath();
-      if (msg.killer === state.myId) hud.showKill(msg.victim);
+      if (msg.killer === state.myId) {
+        const victim = state.players.get(msg.victim);
+        hud.showKill(victim ? victim.name : 'player');
+      }
       break;
+    }
 
     case 'respawn':
       if (msg.player.id === state.myId) localPlayer.onRespawn(msg.player);
@@ -118,7 +119,6 @@ export function onMessage(msg) {
   }
 }
 
-// ---- render loop ----
 function frame(now) {
   requestAnimationFrame(frame);
 
@@ -126,7 +126,7 @@ function frame(now) {
   localPlayer.update(inputState, now);
   remotePlayers.update(now);
   weapons.update(now);
-  renderer.render(now);
+  renderer.render();
 }
 
 boot();
