@@ -3,6 +3,7 @@ let mouseDX = 0;
 let mouseDY = 0;
 let locked = false;
 let firing = false;
+let scoreboardHeld = false;
 
 const MAX_DELTA = 100;
 
@@ -10,10 +11,24 @@ export function init() {
   window.addEventListener('keydown', (e) => {
     keys.add(e.code);
     if (e.code === 'Space') e.preventDefault();
+    if (e.code === 'Tab') {
+      e.preventDefault();
+      scoreboardHeld = true;
+    }
   });
 
   window.addEventListener('keyup', (e) => {
     keys.delete(e.code);
+    if (e.code === 'Tab') {
+      scoreboardHeld = false;
+    }
+  });
+
+  // if window loses focus while tab is held, clear it
+  window.addEventListener('blur', () => {
+    scoreboardHeld = false;
+    keys.clear();
+    firing = false;
   });
 
   document.addEventListener('mousemove', (e) => {
@@ -54,9 +69,8 @@ export function isLocked() {
   return locked;
 }
 
-export function clearDeltas() {
-  mouseDX = 0;
-  mouseDY = 0;
+export function isScoreboardHeld() {
+  return scoreboardHeld;
 }
 
 export function sample() {
