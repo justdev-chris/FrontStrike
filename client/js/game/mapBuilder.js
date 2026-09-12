@@ -1,28 +1,25 @@
 import * as THREE from 'three';
+import { getScene } from '../core/renderer.js';
 
 let group = null;
 let currentMapId = null;
 
-export function build(mapId) {
-  if (currentMapId === mapId && group) return;
-
-  const map = window.__MAPS__?.[mapId];
-  if (!map) {
-    console.warn(`[mapBuilder] unknown map: ${mapId}`);
-    return;
-  }
+export function build(map) {
+  if (!map) return;
+  if (currentMapId === map.id && group) return;
 
   if (group) {
-    group.parent?.remove(group);
+    getScene().remove(group);
     disposeGroup(group);
   }
 
   group = new THREE.Group();
-  currentMapId = mapId;
+  currentMapId = map.id;
 
-  const floorMat = new THREE.MeshLambertMaterial({ color: 0x1c1f24 });
-  const floorGeo = new THREE.PlaneGeometry(map.mapSize, map.mapSize);
-  const floor = new THREE.Mesh(floorGeo, floorMat);
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(map.mapSize, map.mapSize),
+    new THREE.MeshLambertMaterial({ color: 0x1c1f24 })
+  );
   floor.rotation.x = -Math.PI / 2;
   group.add(floor);
 
@@ -35,21 +32,18 @@ export function build(mapId) {
 
   for (const b of map.obstacles) {
     const geo = new THREE.BoxGeometry(b.w, b.h, b.d);
+
     const mesh = new THREE.Mesh(geo, boxMat);
     mesh.position.set(b.x, b.y, b.z);
     group.add(mesh);
 
     const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), edgeMat);
-    edges.position.copy(mesh.position);
+    edges.position.set(b.x, b.y, b.z);
     group.add(edges);
   }
 
-  const { getScene } = await_import_placeholder();
   getScene().add(group);
 }
-
-// three.js needs the scene; importing renderer here keeps main.js from threading it through.
-import { getScene } from '../core/renderer.js';
 
 function disposeGroup(g) {
   g.traverse((obj) => {
