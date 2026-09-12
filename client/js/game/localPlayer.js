@@ -6,6 +6,7 @@ import * as net from '../core/net.js';
 
 const DT = 1 / 60;
 const MAX_HISTORY = 128;
+const RECONCILE_THRESHOLD = 0.05;
 
 const local = {
   x: 0, y: 0, z: 0,
@@ -14,6 +15,7 @@ const local = {
   pitch: 0,
   onGround: true,
   seq: 0,
+  lastAckedSeq: 0,
   history: [],
   alive: true,
   dead: false,
@@ -32,6 +34,8 @@ export function spawn(playerData) {
   local.pitch = playerData.pitch || 0;
   local.vx = local.vy = local.vz = 0;
   local.onGround = true;
+  local.seq = 0;
+  local.lastAckedSeq = 0;
   local.history.length = 0;
   local.alive = true;
   local.dead = false;
@@ -75,6 +79,37 @@ export function update(inputState) {
   local.pitch -= inputState.dy * sens;
   local.pitch = Math.max(-1.5, Math.min(1.5, local.pitch));
 
+  step(inputState);
+
+  local.seq++;
+  local.history.push({
+    seq: local.seq,
+    x: local.x, y: local.y, z: local.z,
+    yaw: local.yaw, pitch: local.pitch,
+    forward: inputState.forward,
+    right: inputState.right,
+    jump: inputState.jump,
+    sprint: inputState.sprint,
+  });
+  while (local.history.length > MAX_HISTORY) local.history.shift();
+
+  net.send({
+    type: 'input',
+    seq: local.seq,
+    forward: inputState.forward,
+    right: inputState.right,
+    jump: inputState.jump,
+    sprint: inputState.sprint,
+    yaw: local.yaw,
+    pitch: local.pitch,
+  });
+
+  if (inputState.fire) shoot();
+
+  syncCamera();
+}
+
+function step(inputState) {
   const speed = PLAYER.MOVE_SPEED * (inputState.sprint ? PLAYER.SPRINT_MULT : 1);
   const sin = Math.sin(local.yaw);
   const cos = Math.cos(local.yaw);
@@ -104,33 +139,6 @@ export function update(inputState) {
   local.z += local.vz * DT;
 
   collide();
-
-  local.seq++;
-  local.history.push({
-    seq: local.seq,
-    x: local.x, y: local.y, z: local.z,
-    yaw: local.yaw, pitch: local.pitch,
-    forward: inputState.forward,
-    right: inputState.right,
-    jump: inputState.jump,
-    sprint: inputState.sprint,
-  });
-  while (local.history.length > MAX_HISTORY) local.history.shift();
-
-  net.send({
-    type: 'input',
-    seq: local.seq,
-    forward: inputState.forward,
-    right: inputState.right,
-    jump: inputState.jump,
-    sprint: inputState.sprint,
-    yaw: local.yaw,
-    pitch: local.pitch,
-  });
-
-  if (inputState.fire) shoot();
-
-  syncCamera();
 }
 
 function shoot() {
@@ -213,13 +221,79 @@ function overlapX(x, r, box) { return x + r > box.x - box.w / 2 && x - r < box.x
 function overlapZ(z, r, box) { return z + r > box.z - box.d / 2 && z - r < box.z + box.d / 2; }
 function overlapY(y, h, box) { return y + h / 2 > box.y - box.h / 2 && y - h / 2 < box.y + box.h / 2; }
 
-export function applySnapshot(players) {
+export function applySnapshot(players, ackedSeq) {
   const me = players.find(p => p.id === state.myId);
   if (!me) return;
+
   state.health = me.health;
   state.alive = me.alive;
   state.kills = me.kills;
   state.deaths = me.deaths;
+
+  if (!me.alive) return;
+
+  // if the server hasn't acked anything we've sent, or the server sends
+  // an older ack than we've already reconciled, skip.
+  if (ackedSeq === undefined || ackedSeq <= local.lastAckedSeq) return;
+
+  const serverX = me.x;
+  const serverY = me.y;
+  const serverZ = me.z;
+
+  // find where the server's acked position lives in our history
+  const ackIndex = local.history.findIndex(h => h.seq === ackedSeq);
+
+  let predictedX, predictedY, predictedZ;
+  if (ackIndex >= 0) {
+    const h = local.history[ackIndex];
+    predictedX = h.x;
+    predictedY = h.y;
+    predictedZ = h.z;
+  } else {
+    predictedX = local.x;
+    predictedY = local.y;
+    predictedZ = local.z;
+  }
+
+  const dx = serverX - predictedX;
+  const dy = serverY - predictedY;
+  const dz = serverZ - predictedZ;
+  const distSq = dx * dx + dy * dy + dz * dz;
+
+  local.lastAckedSeq = ackedSeq;
+
+  if (distSq < RECONCILE_THRESHOLD * RECONCILE_THRESHOLD) {
+    // drop acked history, keep going from current predicted position
+    local.history = local.history.filter(h => h.seq > ackedSeq);
+    return;
+  }
+
+  // hard reconciliation: snap to server position, then replay unacked inputs
+  local.x = serverX;
+  local.y = serverY;
+  local.z = serverZ;
+  local.vx = 0;
+  local.vy = 0;
+  local.vz = 0;
+
+  const unacked = local.history.filter(h => h.seq > ackedSeq);
+  local.history = unacked;
+
+  for (const h of unacked) {
+    local.yaw = h.yaw;
+    local.pitch = h.pitch;
+    step({
+      forward: h.forward,
+      right: h.right,
+      jump: h.jump,
+      sprint: h.sprint,
+      fire: false,
+      dx: 0,
+      dy: 0,
+    });
+  }
+
+  syncCamera();
 }
 
 export function onDeath() {
