@@ -24,11 +24,13 @@ export const state = {
   kills: 0,
   deaths: 0,
   scoreboard: { red: 0, blue: 0 },
+  matchEndTime: 0,
   timeLeft: 0,
   joined: false,
 };
 
 let suppressPause = false;
+let scoreboardOpen = false;
 
 async function boot() {
   renderer.init();
@@ -49,10 +51,9 @@ async function boot() {
       input.lock();
       setTimeout(() => { suppressPause = false; }, 1500);
     },
-    onSettings: (settings) => {
-      // settings.sensitivity, settings.fov
-      // renderer FOV is applied inside menu.js already
-      // localPlayer reads sensitivity at use-time via menu.getSettings()
+    onSettings: () => {
+      // localPlayer reads sensitivity from menu.getSettings() at use time
+      // FOV is applied inside menu.js directly to the camera
     },
   });
 
@@ -175,6 +176,10 @@ function handleMatchState(msg) {
   state.phase = msg.phase;
   state.mode = msg.mode;
 
+  if (typeof msg.matchEndTime === 'number') {
+    state.matchEndTime = msg.matchEndTime;
+  }
+
   if (msg.phase === 'vote') {
     menu.showVote(msg);
     input.unlock();
@@ -195,9 +200,15 @@ function handleMatchState(msg) {
   }
 
   state.scoreboard = msg.scores;
-  state.timeLeft = msg.timeLeft;
+  state.timeLeft = computeTimeLeft();
+
   hud.update(state);
   pushMenuStatus();
+}
+
+function computeTimeLeft() {
+  if (state.phase !== 'playing') return 0;
+  return Math.max(0, state.matchEndTime - Date.now());
 }
 
 function frame(now) {
@@ -207,6 +218,22 @@ function frame(now) {
   localPlayer.update(inputState, now);
   remotePlayers.update(now);
   weapons.update(now);
+
+  // timer ticks locally
+  state.timeLeft = computeTimeLeft();
+
+  // scoreboard on TAB
+  const held = input.isScoreboardHeld();
+  if (held && !scoreboardOpen) {
+    scoreboardOpen = true;
+    hud.update(state);
+    hud.showScoreboard();
+  } else if (!held && scoreboardOpen) {
+    scoreboardOpen = false;
+    hud.hideScoreboard();
+  }
+
+  hud.update(state);
   renderer.render();
 }
 
