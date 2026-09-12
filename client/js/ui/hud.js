@@ -5,21 +5,29 @@ const KILLFEED_TTL = 5000;
 let damageTimeout = null;
 let hitmarkerTimeout = null;
 let respawnTimerId = null;
+let scoreboardVisible = false;
 
 export function init() {
   els = {
-    hud:          document.getElementById('hud'),
-    healthValue:  document.getElementById('healthValue'),
-    ammoValue:    document.getElementById('ammoValue'),
-    killfeed:     document.getElementById('killfeed'),
-    hitmarker:    document.getElementById('hitmarker'),
-    damageFlash:  document.getElementById('damageFlash'),
-    scoreboard:   document.getElementById('scoreboard'),
-    scoreLine:    document.getElementById('scoreLine'),
-    timer:        document.getElementById('timer'),
-    deathOverlay: document.getElementById('deathOverlay'),
-    deathKiller:  document.getElementById('deathKiller'),
-    deathTimer:   document.getElementById('deathTimer'),
+    hud:           document.getElementById('hud'),
+    healthValue:   document.getElementById('healthValue'),
+    ammoValue:     document.getElementById('ammoValue'),
+    killfeed:      document.getElementById('killfeed'),
+    hitmarker:     document.getElementById('hitmarker'),
+    damageFlash:   document.getElementById('damageFlash'),
+    scoreboard:    document.getElementById('scoreboard'),
+    scoreLine:     document.getElementById('scoreLine'),
+    timer:         document.getElementById('timer'),
+    deathOverlay:  document.getElementById('deathOverlay'),
+    deathKiller:   document.getElementById('deathKiller'),
+    deathTimer:    document.getElementById('deathTimer'),
+    tabScoreboard: document.getElementById('tabScoreboard'),
+    tabRed:        document.getElementById('tabRed'),
+    tabBlue:       document.getElementById('tabBlue'),
+    tabFFA:        document.getElementById('tabFFA'),
+    tabMode:       document.getElementById('tabMode'),
+    tabRedScore:   document.getElementById('tabRedScore'),
+    tabBlueScore:  document.getElementById('tabBlueScore'),
   };
 }
 
@@ -47,6 +55,8 @@ export function update(state) {
   } else {
     els.timer.textContent = '';
   }
+
+  if (scoreboardVisible) updateScoreboard(state);
 }
 
 export function addKillfeed(killerId, victimId, weapon, players) {
@@ -139,4 +149,61 @@ export function hideDeath() {
   els.deathOverlay.classList.add('hidden');
   clearInterval(respawnTimerId);
   respawnTimerId = null;
+}
+
+export function showScoreboard() {
+  scoreboardVisible = true;
+  els.tabScoreboard.classList.remove('hidden');
+}
+
+export function hideScoreboard() {
+  scoreboardVisible = false;
+  els.tabScoreboard.classList.add('hidden');
+}
+
+function updateScoreboard(state) {
+  if (!els.tabRed || !els.tabBlue || !els.tabFFA) return;
+
+  const players = [...state.players.values()];
+  players.sort((a, b) => {
+    if (b.kills !== a.kills) return b.kills - a.kills;
+    return a.deaths - b.deaths;
+  });
+
+  if (state.mode === 'tdm') {
+    els.tabScoreboard.classList.remove('ffa');
+    els.tabMode.textContent = 'TEAM DEATHMATCH';
+    els.tabRedScore.textContent = state.scoreboard.red;
+    els.tabBlueScore.textContent = state.scoreboard.blue;
+
+    renderColumn(els.tabRed, players.filter(p => p.team === 'red'), state);
+    renderColumn(els.tabBlue, players.filter(p => p.team === 'blue'), state);
+  } else {
+    els.tabScoreboard.classList.add('ffa');
+    els.tabMode.textContent = 'DEATHMATCH';
+    renderColumn(els.tabFFA, players, state);
+  }
+}
+
+function renderColumn(container, players, state) {
+  container.innerHTML = '';
+  if (players.length === 0) {
+    const row = document.createElement('div');
+    row.className = 'sb-row empty';
+    row.textContent = '—';
+    container.appendChild(row);
+    return;
+  }
+  for (const p of players) {
+    const row = document.createElement('div');
+    row.className = 'sb-row';
+    if (p.id === state.myId) row.classList.add('self');
+    if (!p.alive) row.classList.add('dead');
+
+    row.innerHTML =
+      `<span class="sb-name">${p.name}</span>` +
+      `<span class="sb-kd">${p.kills} / ${p.deaths}</span>`;
+
+    container.appendChild(row);
+  }
 }
