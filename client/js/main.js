@@ -23,18 +23,35 @@ export const state = {
   deaths: 0,
   scoreboard: { red: 0, blue: 0 },
   timeLeft: 0,
+  joined: false,
 };
+
+let lastKnownMapId = null;
 
 async function boot() {
   renderer.init();
   input.init();
   hud.init();
+
   menu.init({
     onPlay: async (name) => {
       await net.connect(name);
+      state.joined = true;
       menu.hide();
       input.lock();
     },
+    onResume: () => {
+      menu.hidePaused();
+      input.lock();
+    },
+  });
+
+  // global pause handling: only when in-game and pointer is not locked
+  document.addEventListener('pointerlockchange', () => {
+    if (!state.joined) return;
+    if (state.phase !== 'playing' && state.phase !== 'vote') return;
+    if (input.isLocked()) return;
+    menu.showPaused();
   });
 }
 
@@ -48,8 +65,12 @@ export function onMessage(msg) {
       state.players.clear();
       for (const p of msg.players) state.players.set(p.id, p);
 
-      mapBuilder.build(state.map);
-      localPlayer.spawn(msg.players.find(p => p.id === msg.id));
+      if (lastKnownMapId !== msg.mapId) {
+        mapBuilder.build(state.map);
+        lastKnownMapId = msg.mapId;
+      }
+
+      localPlayer.spawn(msg.players.find(p => p.id === state.myId));
       remotePlayers.sync(msg.players);
 
       menu.setMaps(msg.maps);
@@ -91,7 +112,11 @@ export function onMessage(msg) {
       break;
 
     case 'death': {
-      if (msg.victim === state.myId) localPlayer.onDeath();
+      if (msg.victim === state.myId) {
+        localPlayer.onDeath();
+        const killer = state.players.get(msg.killer);
+        hud.showDeath(killer ? killer.name : null, 3000);
+      }
       if (msg.killer === state.myId) {
         const victim = state.players.get(msg.victim);
         hud.showKill(victim ? victim.name : 'player');
@@ -100,28 +125,47 @@ export function onMessage(msg) {
     }
 
     case 'respawn':
-      if (msg.player.id === state.myId) localPlayer.onRespawn(msg.player);
-      else remotePlayers.onRespawn(msg.player);
+      if (msg.player.id === state.myId) {
+        localPlayer.onRespawn(msg.player);
+        hud.hideDeath();
+      } else {
+        remotePlayers.onRespawn(msg.player);
+      }
       break;
 
     case 'killfeed':
-      hud.addKillfeed(msg.killer, msg.victim, msg.weapon);
+      hud.addKillfeed(msg.killer, msg.victim, msg.weapon, state.players);
       break;
 
     case 'matchState':
-      state.phase = msg.phase;
-      state.mode = msg.mode;
-      state.mapId = msg.mapId;
-      state.scoreboard = msg.scores;
-      state.timeLeft = msg.timeLeft;
-
-      if (msg.phase === 'vote') menu.showVote(msg);
-      else menu.hideVote();
-
-      if (msg.phase !== 'playing' && msg.phase !== 'vote') menu.show();
-      hud.update(state);
+      handleMatchState(msg);
       break;
   }
+}
+
+function handleMatchState(msg) {
+  state.phase = msg.phase;
+  state.mode = msg.mode;
+
+  if (msg.phase === 'vote') {
+    menu.showVote(msg);
+  } else {
+    menu.hideVote();
+  }
+
+  // rebuild map if the match switched maps
+  if (msg.mapId && msg.mapId !== lastKnownMapId && state.joined) {
+    state.mapId = msg.mapId;
+    // rebuild on next welcome — server sends fresh map on new match
+  }
+
+  if (msg.phase !== 'playing' && msg.phase !== 'vote') {
+    if (!state.joined) menu.show();
+  }
+
+  state.scoreboard = msg.scores;
+  state.timeLeft = msg.timeLeft;
+  hud.update(state);
 }
 
 function frame(now) {
