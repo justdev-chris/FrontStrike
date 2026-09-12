@@ -1,31 +1,31 @@
 import { PLAYER, NET } from '../shared/constants.js';
-import { OBSTACLES, MAP_SIZE } from '../shared/map.js';
 import * as players from './players.js';
+import * as game from './game.js';
 
 const DT = 1 / NET.TICK_RATE;
 
 export function tick() {
-  const now = Date.now();
+  const map = game.getMap();
+
   for (const p of players.getAll().values()) {
     if (!p.alive) continue;
-    applyInput(p, DT);
+    applyInput(p);
     integrate(p, DT);
-    collide(p);
+    collide(p, map);
   }
 }
 
-function applyInput(p, dt) {
+function applyInput(p) {
   const speed = PLAYER.MOVE_SPEED * (p.input.sprint ? PLAYER.SPRINT_MULT : 1);
   const sin = Math.sin(p.yaw);
   const cos = Math.cos(p.yaw);
 
-  // forward is -Z in local space, right is +X
   const fx = -sin * p.input.forward;
   const fz = -cos * p.input.forward;
   const rx =  cos * p.input.right;
   const rz = -sin * p.input.right;
 
-  const len = Math.hypot(fx + rx, fz + rz) || 1;
+  const len = Math.hypot(fx + rx, fz + rz);
   const norm = len > 1 ? len : 1;
 
   p.vx = ((fx + rx) / norm) * speed;
@@ -44,18 +44,17 @@ function integrate(p, dt) {
   p.z += p.vz * dt;
 }
 
-function collide(p) {
+function collide(p, map) {
   const r = PLAYER.RADIUS;
   const h = PLAYER.HEIGHT;
+  const obstacles = map.obstacles;
 
-  // Horizontal: resolve X and Z separately so you slide along walls
-  for (const box of OBSTACLES) {
+  for (const box of obstacles) {
     if (!overlapY(p.y, h, box)) continue;
 
     if (overlapX(p.x, r, box) && overlapZ(p.z, r, box)) {
-      // try to push out on the axis of least penetration
-      const pxLeft  = box.x - box.w / 2 - r - p.x;   // negative
-      const pxRight = box.x + box.w / 2 + r - p.x;   // positive
+      const pxLeft  = box.x - box.w / 2 - r - p.x;
+      const pxRight = box.x + box.w / 2 + r - p.x;
       const pzBack  = box.z - box.d / 2 - r - p.z;
       const pzFront = box.z + box.d / 2 + r - p.z;
 
@@ -67,12 +66,11 @@ function collide(p) {
     }
   }
 
-  // Vertical: ground and ceiling
   p.onGround = false;
   const feet = p.y - h / 2;
   const head = p.y + h / 2;
 
-  for (const box of OBSTACLES) {
+  for (const box of obstacles) {
     const top = box.y + box.h / 2;
     const bottom = box.y - box.h / 2;
 
@@ -88,15 +86,13 @@ function collide(p) {
     }
   }
 
-  // Floor at y=0
   if (p.y - h / 2 <= 0) {
     p.y = h / 2;
     p.vy = 0;
     p.onGround = true;
   }
 
-  // Arena bounds (in case a wall is missed)
-  const lim = MAP_SIZE / 2 - 1;
+  const lim = map.mapSize / 2 - 1;
   if (p.x < -lim) p.x = -lim;
   if (p.x >  lim) p.x =  lim;
   if (p.z < -lim) p.z = -lim;
