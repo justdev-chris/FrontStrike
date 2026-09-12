@@ -26,6 +26,38 @@
       <div id="scoreLine"></div>
       <div id="timer"></div>
     </div>
+
+    <div id="tabScoreboard" class="hidden">
+      <div class="tab-header">
+        <span class="tab-title">SCOREBOARD</span>
+        <span id="tabMode">DEATHMATCH</span>
+      </div>
+
+      <div class="tab-teams">
+        <div class="tab-team red-team">
+          <div class="tab-team-header">
+            <span class="tab-team-name">RED</span>
+            <span id="tabRedScore" class="tab-team-score">0</span>
+          </div>
+          <div id="tabRed" class="tab-rows"></div>
+        </div>
+
+        <div class="tab-team blue-team">
+          <div class="tab-team-header">
+            <span class="tab-team-name">BLUE</span>
+            <span id="tabBlueScore" class="tab-team-score">0</span>
+          </div>
+          <div id="tabBlue" class="tab-rows"></div>
+        </div>
+
+        <div class="tab-team ffa-team">
+          <div class="tab-team-header">
+            <span class="tab-team-name">PLAYERS</span>
+          </div>
+          <div id="tabFFA" class="tab-rows"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="deathOverlay" class="hidden">
@@ -71,7 +103,7 @@
       </div>
 
       <div class="menu-footer">
-        <p class="hint">WASD move • shift sprint • space jump • click fire • esc pause</p>
+        <p class="hint">WASD move • shift sprint • space jump • click fire • tab scoreboard • esc pause</p>
       </div>
     </div>
   </div>
