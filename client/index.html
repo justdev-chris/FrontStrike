@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FrontStrike</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud" class="hidden">
+    <div id="crosshair"></div>
+    <div id="health">
+      <span class="label">HP</span>
+      <span id="healthValue">100</span>
+    </div>
+    <div id="ammo">
+      <span class="label">AMMO</span>
+      <span id="ammoValue">∞</span>
+    </div>
+    <div id="killfeed"></div>
+    <div id="hitmarker" class="hidden"></div>
+    <div id="damageFlash"></div>
+    <div id="scoreboard">
+      <div id="scoreLine"></div>
+      <div id="timer"></div>
+    </div>
+  </div>
+
+  <div id="menu">
+    <div class="menu-panel">
+      <h1>FRONTSTRIKE</h1>
+      <p class="subtitle">multiplayer fps</p>
+
+      <input id="nameInput" type="text" placeholder="callsign" maxlength="16" autocomplete="off" />
+
+      <button id="playBtn">DEPLOY</button>
+
+      <p class="hint">click to lock mouse • WASD move • shift sprint • space jump • left click fire • esc to pause</p>
+    </div>
+  </div>
+
+  <div id="vote" class="hidden">
+    <div class="menu-panel">
+      <h2>VOTE</h2>
+      <div class="vote-section">
+        <h3>MODE</h3>
+        <div id="modeVote" class="vote-options"></div>
+      </div>
+      <div class="vote-section">
+        <h3>MAP</h3>
+        <div id="mapVote" class="vote-options"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="paused" class="hidden">
+    <div class="menu-panel">
+      <h2>PAUSED</h2>
+      <button id="resumeBtn">RESUME</button>
+    </div>
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+      }
+    }
+  </script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
