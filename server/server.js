@@ -122,7 +122,7 @@ function broadcastMatchState() {
     mode: s.mode,
     mapId: s.mapId,
     scores: s.scores,
-    timeLeft: s.phase === 'playing' ? Math.max(0, s.matchEndTime - Date.now()) : 0,
+    matchEndTime: s.matchEndTime,
     modeVotes: s.modeVotes,
     mapVotes: s.mapVotes,
   });
