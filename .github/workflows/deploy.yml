@@ -1,0 +1,38 @@
+name: FrontStrike Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Install cloudflared
+        run: |
+          curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          sudo dpkg -i cloudflared.deb
+
+      - name: Start FrontStrike
+        run: |
+          npm start &
+          sleep 3
+          curl -sSf http://localhost:3000/ > /dev/null && echo "server up"
+
+      - name: Tunnel
+        run: |
+          cloudflared tunnel --url http://localhost:3000 --no-autoupdate
