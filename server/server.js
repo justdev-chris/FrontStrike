@@ -5,7 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 import { NET, MATCH } from '../shared/constants.js';
-import { S2C } from '../shared/protocol.js';
+import { S2C, publicPlayer, publicMap } from '../shared/protocol.js';
 import * as network from './network.js';
 import * as simulation from './simulation.js';
 import * as game from './game.js';
@@ -49,6 +49,7 @@ setInterval(() => {
 
     case 'vote': {
       if (now >= phaseTimer || playerCount === 0) {
+        const prevMapId = s.mapId;
         const mode = game.tallyModeVotes();
         const mapId = game.tallyMapVotes();
         game.setMode(mode);
@@ -58,6 +59,15 @@ setInterval(() => {
         else respawnAll();
 
         game.startMatch(now);
+
+        if (mapId !== prevMapId) {
+          network.broadcast({
+            type: S2C.MAP_CHANGE,
+            mapId,
+            map: publicMap(game.getMap()),
+          });
+        }
+
         broadcastMatchState();
       }
       break;
@@ -99,18 +109,7 @@ function respawnAll() {
     players.respawn(p);
     network.broadcast({
       type: S2C.RESPAWN,
-      player: {
-        id: p.id,
-        name: p.name,
-        team: p.team,
-        x: p.x, y: p.y, z: p.z,
-        yaw: p.yaw,
-        pitch: p.pitch,
-        health: p.health,
-        alive: p.alive,
-        kills: p.kills,
-        deaths: p.deaths,
-      },
+      player: publicPlayer(p),
     });
   }
 }
