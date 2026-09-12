@@ -4,11 +4,11 @@ import { MAPS, DEFAULT_MAP } from '../shared/map.js';
 const state = {
   mode: 'dm',
   mapId: DEFAULT_MAP,
-  phase: 'lobby',        // lobby | vote | playing | ended
+  phase: 'lobby',
   players: new Map(),
   scores: { red: 0, blue: 0 },
   modeVotes: { dm: 0, tdm: 0 },
-  mapVotes: {},          // { [mapId]: count }
+  mapVotes: {},
   matchStartTime: 0,
   matchEndTime: 0,
 };
@@ -60,6 +60,9 @@ export function tallyModeVotes() {
 }
 
 export function tallyMapVotes() {
+  const total = Object.values(state.mapVotes).reduce((a, b) => a + b, 0);
+  if (total === 0) return state.mapId;
+
   let best = state.mapId;
   let bestCount = -1;
   for (const id of Object.keys(MAPS)) {
@@ -69,9 +72,7 @@ export function tallyMapVotes() {
       best = id;
     }
   }
-  // if nobody voted, keep current
-  const total = Object.values(state.mapVotes).reduce((a, b) => a + b, 0);
-  return total === 0 ? state.mapId : best;
+  return best;
 }
 
 export function resetVotes() {
