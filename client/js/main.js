@@ -1,5 +1,3 @@
-import * as THREE from 'three';
-
 import * as net from './core/net.js';
 import * as input from './core/input.js';
 import * as renderer from './core/renderer.js';
@@ -69,13 +67,18 @@ export function onMessage(msg) {
       remotePlayers.remove(msg.id);
       break;
 
-    case 'snapshot':
+    case 'snapshot': {
       state.players.clear();
       for (const p of msg.players) state.players.set(p.id, p);
+
+      const me = msg.players.find(p => p.id === state.myId);
+      const ackedSeq = me ? me.ackedSeq : undefined;
+
       remotePlayers.applySnapshot(msg.players);
-      localPlayer.applySnapshot(msg.players);
+      localPlayer.applySnapshot(msg.players, ackedSeq);
       hud.update(state);
       break;
+    }
 
     case 'shot':
       weapons.onShot(msg);
