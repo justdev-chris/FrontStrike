@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { getCamera } from '../core/renderer.js';
 import { PLAYER, WEAPON } from '/shared/constants.js';
 import { state } from '../main.js';
+import { getSettings } from '../ui/menu.js';
 import * as net from '../core/net.js';
 
 const DT = 1 / 60;
@@ -74,7 +75,9 @@ function buildViewmodel() {
 export function update(inputState) {
   if (local.dead) return;
 
-  const sens = 0.0022;
+  const settings = getSettings();
+  const sens = (settings?.sensitivity ?? 2.2) / 1000;
+
   local.yaw   -= inputState.dx * sens;
   local.pitch -= inputState.dy * sens;
   local.pitch = Math.max(-1.5, Math.min(1.5, local.pitch));
@@ -232,15 +235,12 @@ export function applySnapshot(players, ackedSeq) {
 
   if (!me.alive) return;
 
-  // if the server hasn't acked anything we've sent, or the server sends
-  // an older ack than we've already reconciled, skip.
   if (ackedSeq === undefined || ackedSeq <= local.lastAckedSeq) return;
 
   const serverX = me.x;
   const serverY = me.y;
   const serverZ = me.z;
 
-  // find where the server's acked position lives in our history
   const ackIndex = local.history.findIndex(h => h.seq === ackedSeq);
 
   let predictedX, predictedY, predictedZ;
@@ -263,12 +263,10 @@ export function applySnapshot(players, ackedSeq) {
   local.lastAckedSeq = ackedSeq;
 
   if (distSq < RECONCILE_THRESHOLD * RECONCILE_THRESHOLD) {
-    // drop acked history, keep going from current predicted position
     local.history = local.history.filter(h => h.seq > ackedSeq);
     return;
   }
 
-  // hard reconciliation: snap to server position, then replay unacked inputs
   local.x = serverX;
   local.y = serverY;
   local.z = serverZ;
