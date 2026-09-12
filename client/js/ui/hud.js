@@ -63,6 +63,7 @@ export function addKillfeed(killerId, victimId, weapon) {
 }
 
 function renderKillfeed() {
+  if (!els.killfeed) return;
   els.killfeed.innerHTML = '';
   const now = performance.now();
   for (const entry of killfeedEntries) {
@@ -77,8 +78,8 @@ function renderKillfeed() {
   }
 }
 
-// prune expired killfeed entries on a timer so it doesn't grow forever
 setInterval(() => {
+  if (!els.killfeed) return;
   const now = performance.now();
   let dirty = false;
   for (let i = killfeedEntries.length - 1; i >= 0; i--) {
@@ -106,6 +107,10 @@ export function flashDamage() {
   }, 60);
 }
 
-export function showKill() {
-  // stub — could show a "ELIMINATED" flash here
+export function showKill(victimName) {
+  const banner = document.createElement('div');
+  banner.className = 'kill-banner';
+  banner.innerHTML = `ELIMINATED <span class="victim-name">${victimName}</span>`;
+  document.getElementById('hud').appendChild(banner);
+  setTimeout(() => banner.remove(), 1200);
 }
