@@ -43,12 +43,19 @@ function route(ws, msg) {
 function onJoin(ws, msg) {
   const p = players.create(ws, msg.name);
   const s = game.getState();
+  const map = game.getMap();
 
   send(ws, {
     type: S2C.WELCOME,
     id: p.id,
     mode: s.mode,
     mapId: s.mapId,
+    map: {
+      id: map.id,
+      name: map.name,
+      mapSize: map.mapSize,
+      obstacles: map.obstacles,
+    },
     maps: Object.values(MAPS).map(m => ({ id: m.id, name: m.name })),
     players: [...players.getAll().values()].map(publicPlayer),
   });
