@@ -1,5 +1,3 @@
-export const MODES = ['dm', 'tdm'];
-
 export const NET = {
   TICK_RATE: 30,
   SNAPSHOT_RATE: 20,
