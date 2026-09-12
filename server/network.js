@@ -41,6 +41,13 @@ function route(ws, msg) {
 }
 
 function onJoin(ws, msg) {
+  // if this socket already has a player, treat as reconnect: drop the old one
+  const existing = findBySocket(ws);
+  if (existing) {
+    players.remove(existing.id);
+    broadcast({ type: S2C.PLAYER_LEFT, id: existing.id });
+  }
+
   const p = players.create(ws, msg.name);
   const s = game.getState();
   const map = game.getMap();
@@ -105,11 +112,13 @@ function onShoot(p, msg) {
 function onVoteMode(p, msg) {
   if (game.getState().phase !== 'vote') return;
   game.castModeVote(msg.mode);
+  broadcastVoteState();
 }
 
 function onVoteMap(p, msg) {
   if (game.getState().phase !== 'vote') return;
   game.castMapVote(msg.mapId);
+  broadcastVoteState();
 }
 
 function onRespawn(p) {
@@ -150,6 +159,20 @@ export function broadcast(msg) {
   for (const p of players.getAll().values()) {
     if (p.ws.readyState === 1) p.ws.send(data);
   }
+}
+
+function broadcastVoteState() {
+  const s = game.getState();
+  broadcast({
+    type: S2C.MATCH_STATE,
+    phase: s.phase,
+    mode: s.mode,
+    mapId: s.mapId,
+    scores: s.scores,
+    timeLeft: s.phase === 'playing' ? Math.max(0, s.matchEndTime - Date.now()) : 0,
+    modeVotes: s.modeVotes,
+    mapVotes: s.mapVotes,
+  });
 }
 
 function send(ws, msg) {
