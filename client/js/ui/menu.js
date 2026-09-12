@@ -37,10 +37,10 @@ export function init(cbs) {
   buildModeVoteOptions();
 }
 
-export function show()      { els.menu.classList.remove('hidden'); }
-export function hide()      { els.menu.classList.add('hidden'); }
-export function showPaused(){ els.paused.classList.remove('hidden'); }
-export function hidePaused(){ els.paused.classList.add('hidden'); }
+export function show()       { els.menu.classList.remove('hidden'); }
+export function hide()       { els.menu.classList.add('hidden'); }
+export function showPaused() { els.paused.classList.remove('hidden'); }
+export function hidePaused() { els.paused.classList.add('hidden'); }
 
 export function setMaps(list) {
   maps = list;
