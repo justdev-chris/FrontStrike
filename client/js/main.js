@@ -10,6 +10,8 @@ import * as weapons from './game/weapons.js';
 import * as hud from './ui/hud.js';
 import * as menu from './ui/menu.js';
 
+import { PLAYER } from '/shared/constants.js';
+
 export const state = {
   myId: null,
   mode: 'dm',
@@ -25,8 +27,6 @@ export const state = {
   timeLeft: 0,
   joined: false,
 };
-
-let lastKnownMapId = null;
 
 async function boot() {
   renderer.init();
@@ -46,7 +46,6 @@ async function boot() {
     },
   });
 
-  // global pause handling: only when in-game and pointer is not locked
   document.addEventListener('pointerlockchange', () => {
     if (!state.joined) return;
     if (state.phase !== 'playing' && state.phase !== 'vote') return;
@@ -65,16 +64,19 @@ export function onMessage(msg) {
       state.players.clear();
       for (const p of msg.players) state.players.set(p.id, p);
 
-      if (lastKnownMapId !== msg.mapId) {
-        mapBuilder.build(state.map);
-        lastKnownMapId = msg.mapId;
-      }
-
+      mapBuilder.build(state.map);
       localPlayer.spawn(msg.players.find(p => p.id === state.myId));
       remotePlayers.sync(msg.players);
 
       menu.setMaps(msg.maps);
       hud.update(state);
+      break;
+    }
+
+    case 'mapChange': {
+      state.mapId = msg.mapId;
+      state.map = msg.map;
+      mapBuilder.build(state.map);
       break;
     }
 
@@ -115,7 +117,7 @@ export function onMessage(msg) {
       if (msg.victim === state.myId) {
         localPlayer.onDeath();
         const killer = state.players.get(msg.killer);
-        hud.showDeath(killer ? killer.name : null, 3000);
+        hud.showDeath(killer ? killer.name : null, PLAYER.RESPAWN_MS);
       }
       if (msg.killer === state.myId) {
         const victim = state.players.get(msg.victim);
@@ -151,12 +153,6 @@ function handleMatchState(msg) {
     menu.showVote(msg);
   } else {
     menu.hideVote();
-  }
-
-  // rebuild map if the match switched maps
-  if (msg.mapId && msg.mapId !== lastKnownMapId && state.joined) {
-    state.mapId = msg.mapId;
-    // rebuild on next welcome — server sends fresh map on new match
   }
 
   if (msg.phase !== 'playing' && msg.phase !== 'vote') {
