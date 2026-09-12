@@ -10,6 +10,7 @@ export const C2S = {
 
 export const S2C = {
   WELCOME: 'welcome',
+  MAP_CHANGE: 'mapChange',
   PLAYER_JOINED: 'playerJoined',
   PLAYER_LEFT: 'playerLeft',
   SNAPSHOT: 'snapshot',
@@ -33,5 +34,14 @@ export function publicPlayer(p) {
     alive: p.alive,
     kills: p.kills,
     deaths: p.deaths,
+  };
+}
+
+export function publicMap(map) {
+  return {
+    id: map.id,
+    name: map.name,
+    mapSize: map.mapSize,
+    obstacles: map.obstacles,
   };
 }
