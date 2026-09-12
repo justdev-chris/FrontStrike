@@ -4,6 +4,8 @@ let mouseDY = 0;
 let locked = false;
 let firing = false;
 
+const MAX_DELTA = 100;
+
 export function init() {
   window.addEventListener('keydown', (e) => {
     keys.add(e.code);
@@ -16,8 +18,14 @@ export function init() {
 
   document.addEventListener('mousemove', (e) => {
     if (!locked) return;
-    mouseDX += e.movementX;
-    mouseDY += e.movementY;
+    let dx = e.movementX;
+    let dy = e.movementY;
+    if (dx >  MAX_DELTA) dx =  MAX_DELTA;
+    if (dx < -MAX_DELTA) dx = -MAX_DELTA;
+    if (dy >  MAX_DELTA) dy =  MAX_DELTA;
+    if (dy < -MAX_DELTA) dy = -MAX_DELTA;
+    mouseDX += dx;
+    mouseDY += dy;
   });
 
   document.addEventListener('mousedown', (e) => {
@@ -46,7 +54,11 @@ export function isLocked() {
   return locked;
 }
 
-// returns the current frame's input + clears mouse deltas
+export function clearDeltas() {
+  mouseDX = 0;
+  mouseDY = 0;
+}
+
 export function sample() {
   const s = {
     forward: 0,
