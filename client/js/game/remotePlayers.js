@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { getScene } from '../core/renderer.js';
-import { PLAYER, NET } from '../../../shared/constants.js';
+import { PLAYER, NET } from '/shared/constants.js';
 import { state } from '../main.js';
 
 const INTERP_MS = NET.INTERP_DELAY_MS;
-const avatars = new Map();   // id -> { group, snapshots: [{time, x, y, z, yaw, pitch}] }
+const avatars = new Map();
 
 export function sync(players) {
   const wanted = new Set();
@@ -13,7 +13,7 @@ export function sync(players) {
     if (p.id === state.myId) continue;
     if (!avatars.has(p.id)) create(p);
   }
-  for (const id of avatars.keys()) {
+  for (const id of [...avatars.keys()]) {
     if (!wanted.has(id)) remove(id);
   }
 }
@@ -36,15 +36,18 @@ export function applySnapshot(players) {
   const now = performance.now();
   for (const p of players) {
     if (p.id === state.myId) continue;
-    if (!p.alive) continue;
     const a = avatars.get(p.id);
     if (!a) continue;
+
+    a.group.visible = p.alive;
+
+    if (!p.alive) continue;
+
     a.snapshots.push({
       time: now,
       x: p.x, y: p.y, z: p.z,
       yaw: p.yaw, pitch: p.pitch,
     });
-    // prune old
     while (a.snapshots.length > 20) a.snapshots.shift();
   }
 }
@@ -57,9 +60,9 @@ export function update() {
     const snaps = a.snapshots;
     if (snaps.length === 0) continue;
 
-    // find the two snapshots surrounding renderTime
     let from = snaps[0];
     let to = snaps[snaps.length - 1];
+
     for (let i = 0; i < snaps.length - 1; i++) {
       if (snaps[i].time <= renderTime && snaps[i + 1].time >= renderTime) {
         from = snaps[i];
@@ -73,7 +76,7 @@ export function update() {
     t = Math.max(0, Math.min(1, t));
 
     a.group.position.x = from.x + (to.x - from.x) * t;
-    a.group.position.y = from.y + (to.y - from.y) * t;
+    a.group.position.y = from.y + (to.y - from.y) * t - PLAYER.EYE_HEIGHT + 0.9;
     a.group.position.z = from.z + (to.z - from.z) * t;
 
     a.group.rotation.y = lerpAngle(from.yaw, to.yaw, t);
@@ -99,8 +102,10 @@ export function onRespawn(player) {
 function create(p) {
   const group = new THREE.Group();
 
-  const bodyMat = new THREE.MeshLambertMaterial({ color: colorFor(p) });
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.0, 0.4), bodyMat);
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(0.6, 1.0, 0.4),
+    new THREE.MeshLambertMaterial({ color: colorFor(p) })
+  );
   body.position.y = 0.9;
   group.add(body);
 
