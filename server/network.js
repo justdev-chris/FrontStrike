@@ -1,5 +1,6 @@
 import { C2S, S2C, publicPlayer } from '../shared/protocol.js';
-import { NET, MATCH } from '../shared/constants.js';
+import { NET } from '../shared/constants.js';
+import { MAPS } from '../shared/map.js';
 import * as players from './players.js';
 import * as game from './game.js';
 import * as combat from './combat.js';
@@ -22,18 +23,17 @@ export function handleConnection(ws) {
 }
 
 function route(ws, msg) {
-  if (msg.type === C2S.JOIN) {
-    return onJoin(ws, msg);
-  }
+  if (msg.type === C2S.JOIN) return onJoin(ws, msg);
 
   const p = findBySocket(ws);
   if (!p) return;
 
   switch (msg.type) {
-    case C2S.INPUT:   return onInput(p, msg);
-    case C2S.SHOOT:   return onShoot(p, msg);
-    case C2S.VOTE:    return onVote(p, msg);
-    case C2S.RESPAWN: return onRespawn(p);
+    case C2S.INPUT:     return onInput(p, msg);
+    case C2S.SHOOT:     return onShoot(p, msg);
+    case C2S.VOTE_MODE: return onVoteMode(p, msg);
+    case C2S.VOTE_MAP:  return onVoteMap(p, msg);
+    case C2S.RESPAWN:   return onRespawn(p);
     case C2S.SET_NAME:
       p.name = String(msg.name || '').slice(0, 16);
       return;
@@ -42,12 +42,17 @@ function route(ws, msg) {
 
 function onJoin(ws, msg) {
   const p = players.create(ws, msg.name);
+  const s = game.getState();
+
   send(ws, {
     type: S2C.WELCOME,
     id: p.id,
-    mode: game.getState().mode,
+    mode: s.mode,
+    mapId: s.mapId,
+    maps: Object.values(MAPS).map(m => ({ id: m.id, name: m.name })),
     players: [...players.getAll().values()].map(publicPlayer),
   });
+
   broadcast({ type: S2C.PLAYER_JOINED, player: publicPlayer(p) });
 }
 
@@ -64,6 +69,7 @@ function onInput(p, msg) {
 function onShoot(p, msg) {
   const result = combat.handleShoot(p, msg.dir);
   if (!result) return;
+
   broadcast({
     type: S2C.SHOT,
     shooter: p.id,
@@ -72,12 +78,13 @@ function onShoot(p, msg) {
     hit: result.hit,
     point: result.point,
   });
+
   if (result.hit != null) {
     const victim = players.get(result.hit);
     broadcast({
       type: S2C.DAMAGE,
       victim: victim.id,
-      amount: 0,
+      amount: result.damage,
       health: victim.health,
       attacker: p.id,
     });
@@ -88,9 +95,14 @@ function onShoot(p, msg) {
   }
 }
 
-function onVote(p, msg) {
+function onVoteMode(p, msg) {
   if (game.getState().phase !== 'vote') return;
-  game.castVote(msg.mode);
+  game.castModeVote(msg.mode);
+}
+
+function onVoteMap(p, msg) {
+  if (game.getState().phase !== 'vote') return;
+  game.castMapVote(msg.mapId);
 }
 
 function onRespawn(p) {
@@ -105,7 +117,6 @@ export function startLoop() {
   setInterval(() => {
     const now = Date.now();
 
-    // respawn timers
     for (const p of players.getAll().values()) {
       if (!p.alive && p.respawnAt && now >= p.respawnAt) {
         players.respawn(p);
@@ -113,7 +124,6 @@ export function startLoop() {
       }
     }
 
-    // snapshot
     if (now - lastSnapshot >= SNAPSHOT_MS) {
       lastSnapshot = now;
       broadcast({
