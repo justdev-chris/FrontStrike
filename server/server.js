@@ -5,9 +5,11 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 import { NET, MATCH } from '../shared/constants.js';
+import { S2C } from '../shared/protocol.js';
 import * as network from './network.js';
 import * as simulation from './simulation.js';
 import * as game from './game.js';
+import * as players from './players.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -51,7 +53,10 @@ setInterval(() => {
         const mapId = game.tallyMapVotes();
         game.setMode(mode);
         game.setMap(mapId);
-        if (mode === 'tdm') reassignTeams();
+
+        if (mode === 'tdm') reassignTeamsAndRespawn();
+        else respawnAll();
+
         game.startMatch(now);
         broadcastMatchState();
       }
@@ -79,19 +84,41 @@ setInterval(() => {
 
 network.startLoop();
 
-function reassignTeams() {
+function reassignTeamsAndRespawn() {
   const ps = [...game.getState().players.values()];
   let red = 0, blue = 0;
   for (const p of ps) {
     if (red <= blue) { p.team = 'red'; red++; }
     else             { p.team = 'blue'; blue++; }
   }
+  respawnAll();
+}
+
+function respawnAll() {
+  for (const p of players.getAll().values()) {
+    players.respawn(p);
+    network.broadcast({
+      type: S2C.RESPAWN,
+      player: {
+        id: p.id,
+        name: p.name,
+        team: p.team,
+        x: p.x, y: p.y, z: p.z,
+        yaw: p.yaw,
+        pitch: p.pitch,
+        health: p.health,
+        alive: p.alive,
+        kills: p.kills,
+        deaths: p.deaths,
+      },
+    });
+  }
 }
 
 function broadcastMatchState() {
   const s = game.getState();
   network.broadcast({
-    type: 'matchState',
+    type: S2C.MATCH_STATE,
     phase: s.phase,
     mode: s.mode,
     mapId: s.mapId,
