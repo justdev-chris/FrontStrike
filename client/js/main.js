@@ -49,6 +49,11 @@ async function boot() {
       input.lock();
       setTimeout(() => { suppressPause = false; }, 1500);
     },
+    onSettings: (settings) => {
+      // settings.sensitivity, settings.fov
+      // renderer FOV is applied inside menu.js already
+      // localPlayer reads sensitivity at use-time via menu.getSettings()
+    },
   });
 
   document.addEventListener('pointerlockchange', () => {
@@ -57,6 +62,16 @@ async function boot() {
     if (input.isLocked()) return;
     if (suppressPause) return;
     menu.showPaused();
+  });
+}
+
+function pushMenuStatus() {
+  menu.updateStatus({
+    mode: state.mode,
+    mapId: state.mapId,
+    playerCount: state.players.size,
+    players: [...state.players.values()],
+    phase: state.phase,
   });
 }
 
@@ -76,6 +91,7 @@ export function onMessage(msg) {
 
       menu.setMaps(msg.maps);
       hud.update(state);
+      pushMenuStatus();
       break;
     }
 
@@ -83,17 +99,20 @@ export function onMessage(msg) {
       state.mapId = msg.mapId;
       state.map = msg.map;
       mapBuilder.build(state.map);
+      pushMenuStatus();
       break;
     }
 
     case 'playerJoined':
       state.players.set(msg.player.id, msg.player);
       remotePlayers.add(msg.player);
+      pushMenuStatus();
       break;
 
     case 'playerLeft':
       state.players.delete(msg.id);
       remotePlayers.remove(msg.id);
+      pushMenuStatus();
       break;
 
     case 'snapshot': {
@@ -178,6 +197,7 @@ function handleMatchState(msg) {
   state.scoreboard = msg.scores;
   state.timeLeft = msg.timeLeft;
   hud.update(state);
+  pushMenuStatus();
 }
 
 function frame(now) {
