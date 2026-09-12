@@ -2,7 +2,8 @@ export const C2S = {
   JOIN: 'join',
   INPUT: 'input',
   SHOOT: 'shoot',
-  VOTE: 'vote',
+  VOTE_MODE: 'voteMode',
+  VOTE_MAP: 'voteMap',
   RESPAWN: 'respawn',
   SET_NAME: 'setName',
 };
