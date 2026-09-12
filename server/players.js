@@ -1,10 +1,9 @@
-import { PLAYER, MATCH } from '../shared/constants.js';
-import { SPAWNS } from '../shared/map.js';
+import { PLAYER } from '../shared/constants.js';
 import * as game from './game.js';
 
 let nextId = 1;
 
-const players = new Map();   // id -> player
+const players = new Map();
 game.getState().players = players;
 
 export function getAll() {
@@ -18,6 +17,7 @@ export function get(id) {
 export function create(ws, name) {
   const id = nextId++;
   const state = game.getState();
+  const map = game.getMap();
 
   const team = state.mode === 'tdm' ? pickTeam() : 'ffa';
   const spawn = pickSpawn(team);
@@ -28,7 +28,6 @@ export function create(ws, name) {
     name: sanitizeName(name) || `Player${id}`,
     team,
 
-    // position (server truth)
     x: spawn.x,
     y: spawn.y + PLAYER.EYE_HEIGHT,
     z: spawn.z,
@@ -37,20 +36,16 @@ export function create(ws, name) {
     pitch: 0,
     onGround: true,
 
-    // combat
     health: PLAYER.MAX_HEALTH,
     alive: true,
     lastShotAt: 0,
 
-    // score
     kills: 0,
     deaths: 0,
 
-    // netcode
     lastInputSeq: 0,
-    inputHistory: [],       // {seq, dt, keys, yaw, pitch, x, y, z} for reconciliation
+    inputHistory: [],
 
-    // input (set on each input message)
     input: { forward: 0, right: 0, jump: false, sprint: false },
   };
 
@@ -72,12 +67,12 @@ export function pickTeam() {
 }
 
 export function pickSpawn(team) {
+  const map = game.getMap();
   const list =
-    team === 'red'  ? SPAWNS.red :
-    team === 'blue' ? SPAWNS.blue :
-                      SPAWNS.ffa;
+    team === 'red'  ? map.spawns.red :
+    team === 'blue' ? map.spawns.blue :
+                      map.spawns.ffa;
 
-  // pick the spawn furthest from any living enemy
   let best = list[0];
   let bestDist = -1;
   for (const s of list) {
