@@ -40,6 +40,7 @@ async function boot() {
       await net.connect(name);
       state.joined = true;
       menu.hide();
+      hud.show();
       input.lock();
     },
     onResume: () => {
