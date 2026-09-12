@@ -14,6 +14,7 @@ const PORT = process.env.PORT || 3000;
 
 const app = express();
 app.use(express.static(path.join(__dirname, '..', 'client')));
+app.use('/shared', express.static(path.join(__dirname, '..', 'shared')));
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
@@ -22,12 +23,10 @@ wss.on('connection', (ws) => {
   network.handleConnection(ws);
 });
 
-// ---- simulation loop ----
 setInterval(() => {
   simulation.tick();
 }, 1000 / NET.TICK_RATE);
 
-// ---- match lifecycle ----
 let phaseTimer = 0;
 
 setInterval(() => {
@@ -52,7 +51,6 @@ setInterval(() => {
         const mapId = game.tallyMapVotes();
         game.setMode(mode);
         game.setMap(mapId);
-        // reassign teams if we just switched to tdm
         if (mode === 'tdm') reassignTeams();
         game.startMatch(now);
         broadcastMatchState();
@@ -79,7 +77,6 @@ setInterval(() => {
   }
 }, 500);
 
-// ---- snapshot / respawn loop ----
 network.startLoop();
 
 function reassignTeams() {
