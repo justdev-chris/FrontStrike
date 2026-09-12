@@ -6,7 +6,7 @@ let callbacks = {};
 let maps = [];
 let myVoteMode = null;
 let myVoteMap = null;
-let currentPhase = 'lobby';
+let pausedVisible = false;
 
 const settings = {
   sensitivity: 2.2,
@@ -111,8 +111,20 @@ export function getSettings() {
 
 export function show()       { els.menu.classList.remove('hidden'); }
 export function hide()       { els.menu.classList.add('hidden'); }
-export function showPaused() { els.paused.classList.remove('hidden'); }
-export function hidePaused() { els.paused.classList.add('hidden'); }
+
+export function showPaused() {
+  pausedVisible = true;
+  els.paused.classList.remove('hidden');
+}
+
+export function hidePaused() {
+  pausedVisible = false;
+  els.paused.classList.add('hidden');
+}
+
+export function isPaused() {
+  return pausedVisible;
+}
 
 export function setMaps(list) {
   maps = list;
@@ -120,8 +132,6 @@ export function setMaps(list) {
 }
 
 export function updateStatus(info) {
-  currentPhase = info.phase || currentPhase;
-
   if (els.menuMode) els.menuMode.textContent = (info.mode || 'dm').toUpperCase();
   if (els.menuMap) {
     const mapName = maps.find(m => m.id === info.mapId)?.name || info.mapId || '—';
