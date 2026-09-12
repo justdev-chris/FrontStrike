@@ -31,6 +31,7 @@ export const state = {
 
 let suppressPause = false;
 let scoreboardOpen = false;
+let lockAttemptTimer = null;
 
 async function boot() {
   renderer.init();
@@ -43,20 +44,16 @@ async function boot() {
       state.joined = true;
       menu.hide();
       hud.show();
-      input.lock();
+      requestLock();
     },
     onResume: () => {
       menu.hidePaused();
-      suppressPause = true;
-      input.lock();
-      setTimeout(() => { suppressPause = false; }, 1500);
+      requestLock();
     },
-    onSettings: () => {
-      // localPlayer reads sensitivity from menu.getSettings() at use time
-      // FOV is applied inside menu.js directly to the camera
-    },
+    onSettings: () => {},
   });
 
+  // release lock during vote, re-acquire when playing
   document.addEventListener('pointerlockchange', () => {
     if (!state.joined) return;
     if (state.phase !== 'playing') return;
@@ -64,6 +61,37 @@ async function boot() {
     if (suppressPause) return;
     menu.showPaused();
   });
+
+  // ESC key: deterministic pause trigger, independent of pointerlock events
+  window.addEventListener('keydown', (e) => {
+    if (e.code !== 'Escape') return;
+    if (!state.joined) return;
+    if (state.phase !== 'playing') return;
+    if (menu.isPaused()) return;
+    menu.showPaused();
+    input.unlock();
+  });
+
+  // lock request failed (browser cooldown, user clicked too fast)
+  window.addEventListener('fs-lock-failed', () => {
+    if (!state.joined) return;
+    if (state.phase !== 'playing') return;
+    menu.showPaused();
+  });
+}
+
+function requestLock() {
+  suppressPause = true;
+  input.lock();
+
+  clearTimeout(lockAttemptTimer);
+  lockAttemptTimer = setTimeout(() => {
+    suppressPause = false;
+    // if we never actually acquired lock, surface the pause menu again
+    if (state.joined && state.phase === 'playing' && !input.isLocked()) {
+      menu.showPaused();
+    }
+  }, 1200);
 }
 
 function pushMenuStatus() {
@@ -190,9 +218,7 @@ function handleMatchState(msg) {
   if (prevPhase === 'vote' && msg.phase === 'playing') {
     menu.hide();
     menu.hidePaused();
-    suppressPause = true;
-    input.lock();
-    setTimeout(() => { suppressPause = false; }, 1500);
+    requestLock();
   }
 
   if (msg.phase !== 'playing' && msg.phase !== 'vote') {
@@ -219,10 +245,8 @@ function frame(now) {
   remotePlayers.update(now);
   weapons.update(now);
 
-  // timer ticks locally
   state.timeLeft = computeTimeLeft();
 
-  // scoreboard on TAB
   const held = input.isScoreboardHeld();
   if (held && !scoreboardOpen) {
     scoreboardOpen = true;
