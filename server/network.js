@@ -1,4 +1,4 @@
-import { C2S, S2C, publicPlayer } from '../shared/protocol.js';
+import { C2S, S2C, publicPlayer, publicMap } from '../shared/protocol.js';
 import { NET } from '../shared/constants.js';
 import { MAPS } from '../shared/map.js';
 import * as players from './players.js';
@@ -41,7 +41,6 @@ function route(ws, msg) {
 }
 
 function onJoin(ws, msg) {
-  // if this socket already has a player, treat as reconnect: drop the old one
   const existing = findBySocket(ws);
   if (existing) {
     players.remove(existing.id);
@@ -57,12 +56,7 @@ function onJoin(ws, msg) {
     id: p.id,
     mode: s.mode,
     mapId: s.mapId,
-    map: {
-      id: map.id,
-      name: map.name,
-      mapSize: map.mapSize,
-      obstacles: map.obstacles,
-    },
+    map: publicMap(map),
     maps: Object.values(MAPS).map(m => ({ id: m.id, name: m.name })),
     players: [...players.getAll().values()].map(publicPlayer),
   });
