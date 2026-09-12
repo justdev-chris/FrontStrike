@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { getScene, getCamera } from '../core/renderer.js';
-import { PLAYER, NET, WEAPON } from '../../../shared/constants.js';
+import { getCamera } from '../core/renderer.js';
+import { PLAYER, WEAPON } from '/shared/constants.js';
 import { state } from '../main.js';
 import * as net from '../core/net.js';
 
@@ -17,11 +17,11 @@ const local = {
   history: [],
   alive: true,
   dead: false,
-  respawnAt: 0,
 };
 
 let viewmodel = null;
 let muzzle = null;
+let lastShotAt = 0;
 
 export function spawn(playerData) {
   if (!playerData) return;
@@ -37,7 +37,6 @@ export function spawn(playerData) {
   local.dead = false;
 
   buildViewmodel();
-
   syncCamera();
 }
 
@@ -47,8 +46,10 @@ function buildViewmodel() {
 
   viewmodel = new THREE.Group();
 
-  const bodyMat = new THREE.MeshLambertMaterial({ color: 0x2a2a2e });
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.7), bodyMat);
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(0.12, 0.12, 0.7),
+    new THREE.MeshLambertMaterial({ color: 0x2a2a2e })
+  );
   body.position.set(0.28, -0.22, -0.55);
   viewmodel.add(body);
 
@@ -69,13 +70,11 @@ function buildViewmodel() {
 export function update(inputState) {
   if (local.dead) return;
 
-  // look
   const sens = 0.0022;
   local.yaw   -= inputState.dx * sens;
   local.pitch -= inputState.dy * sens;
   local.pitch = Math.max(-1.5, Math.min(1.5, local.pitch));
 
-  // movement
   const speed = PLAYER.MOVE_SPEED * (inputState.sprint ? PLAYER.SPRINT_MULT : 1);
   const sin = Math.sin(local.yaw);
   const cos = Math.cos(local.yaw);
@@ -106,7 +105,6 @@ export function update(inputState) {
 
   collide();
 
-  // push to server + record history
   local.seq++;
   local.history.push({
     seq: local.seq,
@@ -135,8 +133,6 @@ export function update(inputState) {
   syncCamera();
 }
 
-let lastShotAt = 0;
-
 function shoot() {
   const now = performance.now();
   if (now - lastShotAt < WEAPON.COOLDOWN_MS) return;
@@ -151,22 +147,19 @@ function shoot() {
     dir: { x: dir.x, y: dir.y, z: dir.z },
   });
 
-  flashMuzzle();
-}
-
-function flashMuzzle() {
-  if (!muzzle) return;
-  muzzle.intensity = 3;
-  setTimeout(() => { muzzle.intensity = 0; }, 40);
+  if (muzzle) {
+    muzzle.intensity = 3;
+    setTimeout(() => { if (muzzle) muzzle.intensity = 0; }, 40);
+  }
 }
 
 function syncCamera() {
   const camera = getCamera();
-  camera.position.set(local.x, local.y, local.z);
-  camera.rotation.set(0, 0, 0);
   camera.rotation.order = 'YXZ';
+  camera.position.set(local.x, local.y, local.z);
   camera.rotation.y = local.yaw;
   camera.rotation.x = local.pitch;
+  camera.rotation.z = 0;
 }
 
 function collide() {
