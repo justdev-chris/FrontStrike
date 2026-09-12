@@ -202,6 +202,140 @@ canvas#game {
   text-shadow: 0 0 12px rgba(255, 255, 255, 0.6);
 }
 
+/* ---------- TAB scoreboard ---------- */
+
+#tabScoreboard {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 620px;
+  max-width: 800px;
+  background: rgba(8, 10, 14, 0.88);
+  border: 1px solid rgba(80, 255, 140, 0.15);
+  border-radius: 8px;
+  padding: 20px 24px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+
+.tab-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.tab-title {
+  font-size: 12px;
+  letter-spacing: 4px;
+  opacity: 0.6;
+}
+
+#tabMode {
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 3px;
+}
+
+.tab-teams {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+#tabScoreboard.ffa .tab-teams {
+  grid-template-columns: 1fr;
+}
+
+.tab-team {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.red-team .tab-team-header  { border-bottom: 1px solid rgba(227, 51, 85, 0.4); }
+.blue-team .tab-team-header { border-bottom: 1px solid rgba(68, 170, 255, 0.4); }
+.ffa-team .tab-team-header  { border-bottom: 1px solid rgba(80, 255, 140, 0.3); }
+
+.tab-team-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding-bottom: 6px;
+}
+
+.tab-team-name {
+  font-size: 11px;
+  letter-spacing: 3px;
+  opacity: 0.75;
+}
+
+.red-team .tab-team-name  { color: var(--red); }
+.blue-team .tab-team-name { color: var(--blue); }
+.ffa-team .tab-team-name  { color: var(--accent); }
+
+.tab-team-score {
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.red-team .tab-team-score  { color: var(--red); }
+.blue-team .tab-team-score { color: var(--blue); }
+
+.tab-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sb-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  padding: 6px 10px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 14px;
+}
+
+.sb-row.empty {
+  justify-content: center;
+  grid-template-columns: 1fr;
+  text-align: center;
+  opacity: 0.3;
+  font-style: italic;
+}
+
+.sb-row.self {
+  background: rgba(80, 255, 140, 0.08);
+}
+
+.sb-row.self .sb-name {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.sb-row.dead {
+  opacity: 0.4;
+}
+
+.sb-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sb-kd {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
 #deathOverlay {
   position: fixed;
   inset: 0;
