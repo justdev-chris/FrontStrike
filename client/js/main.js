@@ -16,6 +16,7 @@ export const state = {
   myId: null,
   mode: 'dm',
   mapId: null,
+  map: null,
   phase: 'menu',
   players: new Map(),
   health: 100,
@@ -45,10 +46,11 @@ export function onMessage(msg) {
       state.myId = msg.id;
       state.mode = msg.mode;
       state.mapId = msg.mapId;
+      state.map = msg.map;
       state.players.clear();
       for (const p of msg.players) state.players.set(p.id, p);
 
-      mapBuilder.build(msg.mapId);
+      mapBuilder.build(state.map);
       localPlayer.spawn(msg.players.find(p => p.id === msg.id));
       remotePlayers.sync(msg.players);
 
