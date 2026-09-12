@@ -136,7 +136,10 @@ export function startLoop() {
       broadcast({
         type: S2C.SNAPSHOT,
         tick: now,
-        players: [...players.getAll().values()].map(publicPlayer),
+        players: [...players.getAll().values()].map(p => ({
+          ...publicPlayer(p),
+          ackedSeq: p.lastInputSeq,
+        })),
       });
     }
   }, 1000 / NET.TICK_RATE);
