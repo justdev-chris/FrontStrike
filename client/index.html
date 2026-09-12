@@ -35,21 +35,85 @@
   </div>
 
   <div id="menu">
-    <div class="menu-panel">
-      <h1>FRONTSTRIKE</h1>
-      <p class="subtitle">multiplayer fps</p>
+    <div class="menu-backdrop"></div>
 
+    <div class="menu-content">
+      <div class="menu-header">
+        <h1>FRONTSTRIKE</h1>
+        <p class="subtitle">multiplayer fps</p>
+      </div>
+
+      <div class="menu-main">
+        <div class="menu-buttons">
+          <button id="playBtn" class="menu-btn primary">PLAY</button>
+          <button id="settingsBtn" class="menu-btn">SETTINGS</button>
+        </div>
+
+        <div class="menu-status">
+          <div class="status-block">
+            <div class="status-label">MODE</div>
+            <div class="status-value" id="menuMode">dm</div>
+          </div>
+          <div class="status-block">
+            <div class="status-label">MAP</div>
+            <div class="status-value" id="menuMap">crossfire</div>
+          </div>
+          <div class="status-block">
+            <div class="status-label">PLAYERS</div>
+            <div class="status-value" id="menuCount">0</div>
+          </div>
+        </div>
+
+        <div class="menu-online">
+          <div class="online-header">ONLINE</div>
+          <ul id="menuPlayers" class="online-list"></ul>
+        </div>
+      </div>
+
+      <div class="menu-footer">
+        <p class="hint">WASD move • shift sprint • space jump • click fire • esc pause</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="namePrompt" class="hidden">
+    <div class="menu-backdrop heavy"></div>
+    <div class="prompt-panel">
+      <h2>ENTER CALLSIGN</h2>
       <input id="nameInput" type="text" placeholder="callsign" maxlength="16" autocomplete="off" />
+      <div class="prompt-buttons">
+        <button id="nameConfirm" class="menu-btn primary">DEPLOY</button>
+        <button id="nameCancel" class="menu-btn">CANCEL</button>
+      </div>
+    </div>
+  </div>
 
-      <button id="playBtn">DEPLOY</button>
-
-      <p class="hint">click to lock mouse • WASD move • shift sprint • space jump • left click fire • esc to pause</p>
+  <div id="settingsPanel" class="hidden">
+    <div class="menu-backdrop heavy"></div>
+    <div class="prompt-panel">
+      <h2>SETTINGS</h2>
+      <div class="setting-row">
+        <label for="sensSlider">Sensitivity</label>
+        <input id="sensSlider" type="range" min="0.5" max="5" step="0.1" value="2.2" />
+        <span id="sensValue">2.2</span>
+      </div>
+      <div class="setting-row">
+        <label for="fovSlider">FOV</label>
+        <input id="fovSlider" type="range" min="60" max="110" step="1" value="80" />
+        <span id="fovValue">80</span>
+      </div>
+      <div class="prompt-buttons">
+        <button id="settingsClose" class="menu-btn primary">CLOSE</button>
+      </div>
     </div>
   </div>
 
   <div id="vote" class="hidden">
-    <div class="menu-panel">
-      <h2>VOTE</h2>
+    <div class="menu-backdrop heavy"></div>
+    <div class="menu-content compact">
+      <div class="menu-header">
+        <h2>VOTE</h2>
+      </div>
       <div class="vote-section">
         <h3>MODE</h3>
         <div id="modeVote" class="vote-options"></div>
@@ -62,9 +126,12 @@
   </div>
 
   <div id="paused" class="hidden">
-    <div class="menu-panel">
+    <div class="menu-backdrop heavy"></div>
+    <div class="prompt-panel">
       <h2>PAUSED</h2>
-      <button id="resumeBtn">RESUME</button>
+      <div class="prompt-buttons">
+        <button id="resumeBtn" class="menu-btn primary">RESUME</button>
+      </div>
     </div>
   </div>
 
