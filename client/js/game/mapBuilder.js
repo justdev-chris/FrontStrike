@@ -45,6 +45,10 @@ export function build(map) {
   getScene().add(group);
 }
 
+export function getCurrentMapId() {
+  return currentMapId;
+}
+
 function disposeGroup(g) {
   g.traverse((obj) => {
     if (obj.geometry) obj.geometry.dispose();
