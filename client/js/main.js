@@ -28,6 +28,8 @@ export const state = {
   joined: false,
 };
 
+let suppressPause = false;
+
 async function boot() {
   renderer.init();
   input.init();
@@ -42,14 +44,17 @@ async function boot() {
     },
     onResume: () => {
       menu.hidePaused();
+      suppressPause = true;
       input.lock();
+      setTimeout(() => { suppressPause = false; }, 1500);
     },
   });
 
   document.addEventListener('pointerlockchange', () => {
     if (!state.joined) return;
-    if (state.phase !== 'playing' && state.phase !== 'vote') return;
+    if (state.phase !== 'playing') return;
     if (input.isLocked()) return;
+    if (suppressPause) return;
     menu.showPaused();
   });
 }
@@ -146,13 +151,23 @@ export function onMessage(msg) {
 }
 
 function handleMatchState(msg) {
+  const prevPhase = state.phase;
   state.phase = msg.phase;
   state.mode = msg.mode;
 
   if (msg.phase === 'vote') {
     menu.showVote(msg);
+    input.unlock();
   } else {
     menu.hideVote();
+  }
+
+  if (prevPhase === 'vote' && msg.phase === 'playing') {
+    menu.hide();
+    menu.hidePaused();
+    suppressPause = true;
+    input.lock();
+    setTimeout(() => { suppressPause = false; }, 1500);
   }
 
   if (msg.phase !== 'playing' && msg.phase !== 'vote') {
