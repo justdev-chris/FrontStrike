@@ -1,4 +1,5 @@
 import { PLAYER } from '../shared/constants.js';
+import { getWeapon, DEFAULT_WEAPON } from '../shared/weapons.js';
 import * as game from './game.js';
 
 let nextId = 1;
@@ -17,10 +18,10 @@ export function get(id) {
 export function create(ws, name) {
   const id = nextId++;
   const state = game.getState();
-  const map = game.getMap();
 
   const team = state.mode === 'tdm' ? pickTeam() : 'ffa';
   const spawn = pickSpawn(team);
+  const weapon = getWeapon(DEFAULT_WEAPON);
 
   const player = {
     id,
@@ -47,6 +48,13 @@ export function create(ws, name) {
     inputHistory: [],
 
     input: { forward: 0, right: 0, jump: false, sprint: false },
+
+    // combat / weapon state
+    weaponId: weapon.id,
+    magAmmo: weapon.magSize,
+    reloading: false,
+    reloadEndsAt: 0,
+    aiming: false,
   };
 
   players.set(id, player);
@@ -104,6 +112,13 @@ export function respawn(p) {
   p.alive = true;
   p.onGround = true;
   p.inputHistory = [];
+
+  // refill mag on respawn
+  const w = getWeapon(p.weaponId);
+  p.magAmmo = w.magSize;
+  p.reloading = false;
+  p.reloadEndsAt = 0;
+  p.aiming = false;
 }
 
 function sanitizeName(name) {
