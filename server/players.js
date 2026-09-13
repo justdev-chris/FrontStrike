@@ -49,12 +49,14 @@ export function create(ws, name) {
 
     input: { forward: 0, right: 0, jump: false, sprint: false },
 
-    // combat / weapon state
     weaponId: weapon.id,
     magAmmo: weapon.magSize,
     reloading: false,
     reloadEndsAt: 0,
     aiming: false,
+
+    emote: null,
+    emoteEndsAt: 0,
   };
 
   players.set(id, player);
@@ -113,12 +115,28 @@ export function respawn(p) {
   p.onGround = true;
   p.inputHistory = [];
 
-  // refill mag on respawn
   const w = getWeapon(p.weaponId);
   p.magAmmo = w.magSize;
   p.reloading = false;
   p.reloadEndsAt = 0;
   p.aiming = false;
+
+  p.emote = null;
+  p.emoteEndsAt = 0;
+}
+
+export function setEmote(p, emoteId, durationMs) {
+  p.emote = emoteId;
+  p.emoteEndsAt = Date.now() + durationMs;
+  // emoting cancels reload and aim
+  p.reloading = false;
+  p.reloadEndsAt = 0;
+  p.aiming = false;
+}
+
+export function clearEmote(p) {
+  p.emote = null;
+  p.emoteEndsAt = 0;
 }
 
 function sanitizeName(name) {
