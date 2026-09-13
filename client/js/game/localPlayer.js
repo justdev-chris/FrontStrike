@@ -1,10 +1,13 @@
 import * as THREE from 'three';
 import { getCamera } from '../core/renderer.js';
-import { PLAYER, WEAPON } from '/shared/constants.js';
+import { PLAYER } from '/shared/constants.js';
+import { getWeapon } from '/shared/weapons.js';
 import { moveAndCollide, expandStairs } from '/shared/collision.js';
 import { state } from '../main.js';
 import { getSettings } from '../ui/menu.js';
 import * as net from '../core/net.js';
+import * as weaponView from './weaponView.js';
+import * as scope from './scope.js';
 
 const DT = 1 / 60;
 const MAX_HISTORY = 128;
@@ -21,13 +24,19 @@ const local = {
   history: [],
   alive: true,
   dead: false,
+
+  weaponId: 'rifle',
+  magAmmo: 30,
+  reloading: false,
+  reloadEndsAt: 0,
+  aiming: false,
+
+  recoilPitch: 0,
+  recoilYaw: 0,
+
+  lastShotAt: 0,
 };
 
-let viewmodel = null;
-let muzzle = null;
-let lastShotAt = 0;
-
-// cache expanded solids per map id
 let cachedSolids = null;
 let cachedMapId = null;
 
@@ -55,49 +64,51 @@ export function spawn(playerData) {
   local.alive = true;
   local.dead = false;
 
-  buildViewmodel();
+  // restore weapon loadout
+  const w = getWeapon(local.weaponId);
+  local.magAmmo = w.magSize;
+  local.reloading = false;
+  local.aiming = false;
+  local.recoilPitch = 0;
+  local.recoilYaw = 0;
+
+  weaponView.setWeapon(local.weaponId);
   syncCamera();
 }
 
-function buildViewmodel() {
-  if (viewmodel) return;
-  const camera = getCamera();
-
-  viewmodel = new THREE.Group();
-
-  const body = new THREE.Mesh(
-    new THREE.BoxGeometry(0.12, 0.12, 0.7),
-    new THREE.MeshLambertMaterial({ color: 0x2a2a2e })
-  );
-  body.position.set(0.28, -0.22, -0.55);
-  viewmodel.add(body);
-
-  const barrel = new THREE.Mesh(
-    new THREE.BoxGeometry(0.05, 0.05, 0.4),
-    new THREE.MeshLambertMaterial({ color: 0x111114 })
-  );
-  barrel.position.set(0.28, -0.20, -1.0);
-  viewmodel.add(barrel);
-
-  muzzle = new THREE.PointLight(0xffaa33, 0, 6);
-  muzzle.position.set(0.28, -0.20, -1.2);
-  viewmodel.add(muzzle);
-
-  camera.add(viewmodel);
-}
-
-export function update(inputState) {
+export function update(inputState, now) {
   if (local.dead) return;
 
+  // ---- look ----
   const settings = getSettings();
-  const sens = (settings?.sensitivity ?? 2.2) / 1000;
+  const baseSens = (settings?.sensitivity ?? 2.2) / 1000;
+
+  // ADS sensitivity scale: proportional to zoom
+  const w = getWeapon(local.weaponId);
+  const fovScale = local.aiming ? (w.adsZoom / 80) : 1;
+  const sens = baseSens * fovScale;
 
   local.yaw   -= inputState.dx * sens;
   local.pitch -= inputState.dy * sens;
-  local.pitch = Math.max(-1.5, Math.min(1.5, local.pitch));
 
-  step(inputState);
+  // ---- recoil offsets decay ----
+  const recoverRate = 1000 / Math.max(60, w.recoilRecoverMs);
+  local.recoilPitch = approach(local.recoilPitch, 0, (recoverRate / 1000) * DT * 3);
+  local.recoilYaw   = approach(local.recoilYaw, 0,   (recoverRate / 1000) * DT * 3);
 
+  // effective pitch/yaw = base + recoil
+  const effPitch = clamp(local.pitch + local.recoilPitch, -1.5, 1.5);
+  const effYaw   = local.yaw + local.recoilYaw;
+
+  // ---- weapons / aim / fire ----
+  handleWeaponInputs(inputState, now);
+
+  // ---- movement ----
+  const moveMult = local.aiming ? w.moveMultAds : 1;
+  step(inputState, moveMult, effYaw);
+
+  // history records base pitch/yaw (not recoil) so reconciliation doesn't
+  // compound recoil on replay
   local.seq++;
   local.history.push({
     seq: local.seq,
@@ -117,19 +128,127 @@ export function update(inputState) {
     right: inputState.right,
     jump: inputState.jump,
     sprint: inputState.sprint,
-    yaw: local.yaw,
-    pitch: local.pitch,
+    yaw: effYaw,
+    pitch: effPitch,
+    aiming: local.aiming,
+    weaponId: local.weaponId,
+    reloading: local.reloading,
   });
 
-  if (inputState.fire) shoot();
+  if (inputState.fire && canShoot(now)) shoot(effYaw, effPitch);
 
-  syncCamera();
+  // viewmodel + scope
+  weaponView.setAiming(local.aiming);
+  weaponView.setReloading(local.reloading);
+  weaponView.update(inputState);
+  scope.update(local.aiming, local.weaponId);
+
+  syncCamera(effPitch, effYaw);
+
+  // publish to shared state for HUD
+  state.magAmmo = local.magAmmo;
+  state.reloading = local.reloading;
+  state.weaponId = local.weaponId;
+  state.aiming = local.aiming;
 }
 
-function step(inputState) {
-  const speed = PLAYER.MOVE_SPEED * (inputState.sprint ? PLAYER.SPRINT_MULT : 1);
-  const sin = Math.sin(local.yaw);
-  const cos = Math.cos(local.yaw);
+function handleWeaponInputs(inputState, now) {
+  // weapon switch
+  if (inputState.switchWeapon) {
+    switchWeapon(inputState.switchWeapon);
+  }
+
+  // reload
+  if (inputState.reload && !local.reloading) {
+    startReload(now);
+  }
+
+  // aiming toggle (hold right-click)
+  local.aiming = !!inputState.aim && !local.reloading;
+
+  // auto-cancel reload if we've switched weapons (switchWeapon handles)
+  if (local.reloading && now >= local.reloadEndsAt) {
+    finishReload();
+  }
+}
+
+function switchWeapon(slotId) {
+  if (slotId === local.weaponId) return;
+  local.weaponId = slotId;
+  const w = getWeapon(slotId);
+  local.magAmmo = w.magSize;
+  local.reloading = false;
+  local.aiming = false;
+  local.recoilPitch = 0;
+  local.recoilYaw = 0;
+  weaponView.setWeapon(slotId);
+}
+
+function startReload(now) {
+  const w = getWeapon(local.weaponId);
+  if (local.magAmmo >= w.magSize) return;
+  local.reloading = true;
+  local.reloadEndsAt = now + w.reloadMs;
+  local.aiming = false;
+}
+
+function finishReload() {
+  const w = getWeapon(local.weaponId);
+  local.magAmmo = w.magSize;
+  local.reloading = false;
+}
+
+function canShoot(now) {
+  if (local.reloading) return false;
+  const w = getWeapon(local.weaponId);
+  if (local.magAmmo <= 0) return false;
+  if (now - local.lastShotAt < w.fireRateMs) return false;
+  return true;
+}
+
+function shoot(effYaw, effPitch) {
+  const now = performance.now();
+  local.lastShotAt = now;
+  local.magAmmo--;
+  const w = getWeapon(local.weaponId);
+
+  // recoil kick
+  local.recoilPitch += w.recoilPitch;
+  local.recoilYaw   += (Math.random() * 2 - 1) * w.recoilYaw;
+
+  // send shot
+  const dir = directionFromAngles(effYaw, effPitch);
+  net.send({
+    type: 'shoot',
+    weaponId: local.weaponId,
+    dir: { x: dir.x, y: dir.y, z: dir.z },
+  });
+
+  weaponView.triggerRecoil();
+  weaponView.triggerMuzzleFlash();
+
+  // auto-reload if empty
+  if (local.magAmmo <= 0) {
+    startReload(now);
+  }
+}
+
+function directionFromAngles(yaw, pitch) {
+  const cy = Math.cos(yaw);
+  const sy = Math.sin(yaw);
+  const cp = Math.cos(pitch);
+  const sp = Math.sin(pitch);
+  return {
+    x: -sy * cp,
+    y: sp,
+    z: -cy * cp,
+  };
+}
+
+function step(inputState, moveMult, effYaw) {
+  const speed = PLAYER.MOVE_SPEED * (inputState.sprint ? PLAYER.SPRINT_MULT : 1) * moveMult;
+  const sin = Math.sin(effYaw);
+  const cos = Math.cos(effYaw);
 
   const fx = -sin * inputState.forward;
   const fz = -cos * inputState.forward;
@@ -166,33 +285,24 @@ function step(inputState) {
   if (next.onGround && local.vy < 0) local.vy = 0;
 }
 
-function shoot() {
-  const now = performance.now();
-  if (now - lastShotAt < WEAPON.COOLDOWN_MS) return;
-  lastShotAt = now;
-
-  const camera = getCamera();
-  const dir = new THREE.Vector3();
-  camera.getWorldDirection(dir);
-
-  net.send({
-    type: 'shoot',
-    dir: { x: dir.x, y: dir.y, z: dir.z },
-  });
-
-  if (muzzle) {
-    muzzle.intensity = 3;
-    setTimeout(() => { if (muzzle) muzzle.intensity = 0; }, 40);
-  }
-}
-
-function syncCamera() {
+function syncCamera(effPitch, effYaw) {
   const camera = getCamera();
   camera.rotation.order = 'YXZ';
   camera.position.set(local.x, local.y, local.z);
-  camera.rotation.y = local.yaw;
-  camera.rotation.x = local.pitch;
+  camera.rotation.y = effYaw !== undefined ? effYaw : local.yaw;
+  camera.rotation.x = effPitch !== undefined ? effPitch : local.pitch;
   camera.rotation.z = 0;
+
+  // ADS FOV lerp
+  const w = getWeapon(local.weaponId);
+  const targetFov = local.aiming ? w.adsZoom : 80;
+  if (Math.abs(camera.fov - targetFov) > 0.1) {
+    const rate = 1000 / Math.max(60, w.adsTimeMs);
+    const stepSize = rate * (1 / 60);
+    if (camera.fov < targetFov) camera.fov = Math.min(targetFov, camera.fov + stepSize);
+    else camera.fov = Math.max(targetFov, camera.fov - stepSize);
+    camera.updateProjectionMatrix();
+  }
 }
 
 export function applySnapshot(players, ackedSeq) {
@@ -257,9 +367,12 @@ export function applySnapshot(players, ackedSeq) {
       jump: h.jump,
       sprint: h.sprint,
       fire: false,
+      reload: false,
+      aim: false,
+      switchWeapon: null,
       dx: 0,
       dy: 0,
-    });
+    }, 1, local.yaw);
   }
 
   syncCamera();
@@ -269,9 +382,21 @@ export function onDeath() {
   local.dead = true;
   local.alive = false;
   state.alive = false;
+  local.reloading = false;
+  local.aiming = false;
 }
 
 export function onRespawn(playerData) {
   spawn(playerData);
   state.alive = true;
+}
+
+function approach(current, target, rate) {
+  if (current < target) return Math.min(target, current + rate);
+  if (current > target) return Math.max(target, current - rate);
+  return target;
+}
+
+function clamp(v, a, b) {
+  return Math.max(a, Math.min(b, v));
 }
