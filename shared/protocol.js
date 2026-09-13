@@ -34,6 +34,8 @@ export function publicPlayer(p) {
     alive: p.alive,
     kills: p.kills,
     deaths: p.deaths,
+    weaponId: p.weaponId,
+    aiming: p.aiming,
   };
 }
 
