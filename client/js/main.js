@@ -6,6 +6,8 @@ import * as mapBuilder from './game/mapBuilder.js';
 import * as localPlayer from './game/localPlayer.js';
 import * as remotePlayers from './game/remotePlayers.js';
 import * as weapons from './game/weapons.js';
+import * as weaponView from './game/weaponView.js';
+import * as scope from './game/scope.js';
 
 import * as hud from './ui/hud.js';
 import * as menu from './ui/menu.js';
@@ -27,6 +29,12 @@ export const state = {
   matchEndTime: 0,
   timeLeft: 0,
   joined: false,
+
+  // weapon / HUD state, published by localPlayer.js
+  weaponId: 'rifle',
+  magAmmo: 30,
+  reloading: false,
+  aiming: false,
 };
 
 let suppressPause = false;
@@ -37,6 +45,8 @@ async function boot() {
   renderer.init();
   input.init();
   hud.init();
+  weaponView.init();
+  scope.init();
 
   menu.init({
     onPlay: async (name) => {
