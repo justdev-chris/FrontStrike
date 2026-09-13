@@ -1,110 +1,65 @@
 import { PLAYER, NET } from '../shared/constants.js';
+import { moveAndCollide, expandStairs } from '../shared/collision.js';
 import * as players from './players.js';
 import * as game from './game.js';
 
 const DT = 1 / NET.TICK_RATE;
 
+// Cache expanded solids per mapId so we don't rebuild stairs every tick.
+const expandedCache = new Map();
+
+function getSolids(map) {
+  if (expandedCache.has(map.id)) return expandedCache.get(map.id);
+  const solids = expandStairs(map.obstacles);
+  expandedCache.set(map.id, solids);
+  return solids;
+}
+
 export function tick() {
   const map = game.getMap();
+  const solids = getSolids(map);
 
   for (const p of players.getAll().values()) {
     if (!p.alive) continue;
-    applyInput(p);
-    integrate(p, DT);
-    collide(p, map);
-  }
-}
 
-function applyInput(p) {
-  const speed = PLAYER.MOVE_SPEED * (p.input.sprint ? PLAYER.SPRINT_MULT : 1);
-  const sin = Math.sin(p.yaw);
-  const cos = Math.cos(p.yaw);
+    // horizontal input
+    const speed = PLAYER.MOVE_SPEED * (p.input.sprint ? PLAYER.SPRINT_MULT : 1);
+    const sin = Math.sin(p.yaw);
+    const cos = Math.cos(p.yaw);
 
-  const fx = -sin * p.input.forward;
-  const fz = -cos * p.input.forward;
-  const rx =  cos * p.input.right;
-  const rz = -sin * p.input.right;
+    const fx = -sin * p.input.forward;
+    const fz = -cos * p.input.forward;
+    const rx =  cos * p.input.right;
+    const rz = -sin * p.input.right;
 
-  const len = Math.hypot(fx + rx, fz + rz);
-  const norm = len > 1 ? len : 1;
+    let mx = fx + rx;
+    let mz = fz + rz;
+    const len = Math.hypot(mx, mz);
+    if (len > 1) { mx /= len; mz /= len; }
 
-  p.vx = ((fx + rx) / norm) * speed;
-  p.vz = ((fz + rz) / norm) * speed;
+    const dx = mx * speed * DT;
+    const dz = mz * speed * DT;
 
-  if (p.input.jump && p.onGround) {
-    p.vy = PLAYER.JUMP_VELOCITY;
-    p.onGround = false;
-  }
-}
-
-function integrate(p, dt) {
-  p.vy -= PLAYER.GRAVITY * dt;
-  p.x += p.vx * dt;
-  p.y += p.vy * dt;
-  p.z += p.vz * dt;
-}
-
-function collide(p, map) {
-  const r = PLAYER.RADIUS;
-  const h = PLAYER.HEIGHT;
-  const obstacles = map.obstacles;
-
-  for (const box of obstacles) {
-    if (!overlapY(p.y, h, box)) continue;
-
-    if (overlapX(p.x, r, box) && overlapZ(p.z, r, box)) {
-      const pxLeft  = box.x - box.w / 2 - r - p.x;
-      const pxRight = box.x + box.w / 2 + r - p.x;
-      const pzBack  = box.z - box.d / 2 - r - p.z;
-      const pzFront = box.z + box.d / 2 + r - p.z;
-
-      const dx = Math.abs(pxLeft) < Math.abs(pxRight) ? pxLeft : pxRight;
-      const dz = Math.abs(pzBack) < Math.abs(pzFront) ? pzBack : pzFront;
-
-      if (Math.abs(dx) < Math.abs(dz)) p.x += dx;
-      else p.z += dz;
+    // jump / gravity
+    if (p.input.jump && p.onGround) {
+      p.vy = PLAYER.JUMP_VELOCITY;
+      p.onGround = false;
     }
+    p.vy -= PLAYER.GRAVITY * DT;
+    const dy = p.vy * DT;
+
+    const next = moveAndCollide(
+      { x: p.x, y: p.y, z: p.z, vy: p.vy },
+      dx, dy, dz,
+      PLAYER.RADIUS, PLAYER.HEIGHT,
+      solids
+    );
+
+    p.x = next.x;
+    p.y = next.y;
+    p.z = next.z;
+    p.vy = next.vy;
+    p.onGround = next.onGround;
+    if (next.onGround && p.vy < 0) p.vy = 0;
   }
-
-  p.onGround = false;
-  const feet = p.y - h / 2;
-  const head = p.y + h / 2;
-
-  for (const box of obstacles) {
-    const top = box.y + box.h / 2;
-    const bottom = box.y - box.h / 2;
-
-    if (!overlapX(p.x, r, box) || !overlapZ(p.z, r, box)) continue;
-
-    if (p.vy <= 0 && feet <= top && feet >= top - 0.5) {
-      p.y = top + h / 2;
-      p.vy = 0;
-      p.onGround = true;
-    } else if (p.vy > 0 && head >= bottom && head <= bottom + 0.5) {
-      p.y = bottom - h / 2;
-      p.vy = 0;
-    }
-  }
-
-  if (p.y - h / 2 <= 0) {
-    p.y = h / 2;
-    p.vy = 0;
-    p.onGround = true;
-  }
-
-  const lim = map.mapSize / 2 - 1;
-  if (p.x < -lim) p.x = -lim;
-  if (p.x >  lim) p.x =  lim;
-  if (p.z < -lim) p.z = -lim;
-  if (p.z >  lim) p.z =  lim;
-}
-
-function overlapX(x, r, box) {
-  return x + r > box.x - box.w / 2 && x - r < box.x + box.w / 2;
-}
-function overlapZ(z, r, box) {
-  return z + r > box.z - box.d / 2 && z - r < box.z + box.d / 2;
-}
-function overlapY(y, h, box) {
-  return y + h / 2 > box.y - box.h / 2 && y - h / 2 < box.y + box.h / 2;
 }
