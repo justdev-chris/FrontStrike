@@ -12,6 +12,10 @@ export function init() {
     hud:           document.getElementById('hud'),
     healthValue:   document.getElementById('healthValue'),
     ammoValue:     document.getElementById('ammoValue'),
+    ammoMag:       document.getElementById('ammoMag'),
+    ammoReserve:   document.getElementById('ammoReserve'),
+    weaponName:    document.getElementById('weaponName'),
+    reloadBar:     document.getElementById('reloadBar'),
     killfeed:      document.getElementById('killfeed'),
     hitmarker:     document.getElementById('hitmarker'),
     damageFlash:   document.getElementById('damageFlash'),
@@ -54,6 +58,18 @@ export function update(state) {
     els.timer.textContent = `${m}:${sec}`;
   } else {
     els.timer.textContent = '';
+  }
+
+  // ammo
+  if (els.ammoMag && state.magAmmo !== undefined) {
+    els.ammoMag.textContent = state.magAmmo;
+    els.ammoReserve.textContent = '∞';
+    if (els.weaponName) {
+      els.weaponName.textContent = (state.weaponId || '').toUpperCase();
+    }
+    if (els.reloadBar) {
+      els.reloadBar.classList.toggle('active', !!state.reloading);
+    }
   }
 
   if (scoreboardVisible) updateScoreboard(state);
