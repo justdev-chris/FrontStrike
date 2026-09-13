@@ -1,9 +1,9 @@
-import { WEAPON, PLAYER } from '../shared/constants.js';
+import { PLAYER } from '../shared/constants.js';
+import { getWeapon } from '../shared/weapons.js';
 import { raycastSolids, expandStairs } from '../shared/collision.js';
 import * as players from './players.js';
 import * as game from './game.js';
 
-// Cache expanded solids per mapId, same as simulation.
 const expandedCache = new Map();
 
 function getSolids(map) {
@@ -13,24 +13,35 @@ function getSolids(map) {
   return solids;
 }
 
-export function handleShoot(shooter, dir) {
+export function handleShoot(shooter, dir, requestedWeaponId) {
   const now = Date.now();
   if (!shooter.alive) return null;
-  if (now - shooter.lastShotAt < WEAPON.COOLDOWN_MS) return null;
+
+  const w = getWeapon(shooter.weaponId);
+
+  // fire rate gate
+  if (now - shooter.lastShotAt < w.fireRateMs) return null;
+
+  // reload gate
+  if (shooter.reloading) return null;
+
+  // ammo gate
+  if (shooter.magAmmo <= 0) return null;
+
   shooter.lastShotAt = now;
+  shooter.magAmmo--;
 
   const map = game.getMap();
   const solids = getSolids(map);
   const origin = { x: shooter.x, y: shooter.y, z: shooter.z };
 
-  // normalize
   const len = Math.hypot(dir.x, dir.y, dir.z) || 1;
   const d = { x: dir.x / len, y: dir.y / len, z: dir.z / len };
 
-  const worldHit = raycastSolids(origin, d, WEAPON.RANGE, solids);
-  const worldT = worldHit ? worldHit.t : WEAPON.RANGE;
+  const worldHit = raycastSolids(origin, d, w.range, solids);
+  const worldT = worldHit ? worldHit.t : w.range;
 
-  const playerHit = raycastPlayers(origin, d, shooter, worldT);
+  const playerHit = raycastPlayers(origin, d, shooter, worldT, w);
 
   if (playerHit) {
     const { victim, t, point, damage } = playerHit;
@@ -52,7 +63,7 @@ export function handleShoot(shooter, dir) {
   };
 }
 
-function raycastPlayers(origin, dir, shooter, maxT) {
+function raycastPlayers(origin, dir, shooter, maxT, weapon) {
   let best = null;
 
   for (const p of players.getAll().values()) {
@@ -74,11 +85,12 @@ function raycastPlayers(origin, dir, shooter, maxT) {
       z: origin.z + dir.z * hit,
     };
 
-    // headshot: top 25% of the AABB
     const topOfBox = p.y + PLAYER.HEIGHT / 2;
     const headLine = topOfBox - PLAYER.HEIGHT * 0.25;
     const isHead = point.y >= headLine;
-    const damage = isHead ? WEAPON.DAMAGE_HEAD : WEAPON.DAMAGE_BODY;
+    const damage = isHead
+      ? weapon.damage * weapon.headMult
+      : weapon.damage;
 
     best = { victim: p, t: hit, point, damage };
   }
@@ -86,7 +98,6 @@ function raycastPlayers(origin, dir, shooter, maxT) {
   return best;
 }
 
-// Local AABB raycast — player bodies are always boxes, not ramps.
 function rayAABB(o, d, box) {
   const minX = box.x - box.w / 2, maxX = box.x + box.w / 2;
   const minY = box.y - box.h / 2, maxY = box.y + box.h / 2;
@@ -122,5 +133,7 @@ function applyDamage(attacker, victim, dmg) {
     attacker.kills++;
     game.addKill(attacker.team);
     victim.respawnAt = Date.now() + PLAYER.RESPAWN_MS;
+    victim.reloading = false;
+    victim.aiming = false;
   }
 }
