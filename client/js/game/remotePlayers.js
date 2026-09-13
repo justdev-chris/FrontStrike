@@ -32,6 +32,19 @@ export function remove(id) {
   avatars.delete(id);
 }
 
+export function setEmote(playerId, emote, endsAt) {
+  const a = avatars.get(playerId);
+  if (!a) return;
+  if (!emote) {
+    a.emote = null;
+    a.emoteEndsAt = 0;
+    return;
+  }
+  a.emote = emote;
+  a.emoteEndsAt = endsAt;
+  a.emoteStart = performance.now();
+}
+
 export function applySnapshot(players) {
   const now = performance.now();
   for (const p of players) {
@@ -50,10 +63,22 @@ export function applySnapshot(players) {
     if (!a.alive) {
       a.alive = true;
       a.fallStart = null;
-      a.group.rotation.z = 0;
       a.group.rotation.x = 0;
+      a.group.rotation.z = 0;
       a.snapshots.length = 0;
     }
+
+    // server-side emote state sync (in case we missed the broadcast)
+    if (p.emote !== a.emote) {
+      if (p.emote) {
+        a.emote = p.emote;
+        a.emoteStart = now;
+      } else {
+        a.emote = null;
+      }
+    }
+
+    a.aiming = !!p.aiming;
 
     a.snapshots.push({
       time: now,
@@ -96,7 +121,6 @@ export function update() {
     const py = from.y + (to.y - from.y) * t - PLAYER.EYE_HEIGHT + 0.9;
     const pz = from.z + (to.z - from.z) * t;
 
-    // estimate horizontal speed from snapshot delta
     const dt = Math.max(0.001, (to.time - from.time) / 1000);
     const dx = to.x - from.x;
     const dz = to.z - from.z;
@@ -105,7 +129,14 @@ export function update() {
     a.group.position.set(px, py, pz);
     a.group.rotation.y = lerpAngle(from.yaw, to.yaw, t);
     a.walkPhase += speed * dt * 2.4;
-    animate(a, from.pitch + (to.pitch - from.pitch) * t, speed);
+
+    const pitch = from.pitch + (to.pitch - from.pitch) * t;
+
+    if (a.emote) {
+      animateEmote(a, now, pitch);
+    } else {
+      animate(a, pitch, speed);
+    }
   }
 }
 
@@ -120,10 +151,72 @@ function animate(a, pitch, speed) {
   a.body.position.y = a.bodyBaseY + bob;
   a.head.position.y = a.headBaseY + bob;
 
-  a.upper.rotation.x = -pitch;
+  const targetUpper = -pitch;
+  a.upper.rotation.x = targetUpper;
 
+  // arms track aim + pitch
   a.arms.rotation.x = -pitch;
   a.arms.position.y = a.armsBaseY + bob;
+
+  // reset emote-influenced joints
+  a.armL.rotation.x = 0;
+  a.armL.rotation.z = 0;
+  a.armR.rotation.x = 0;
+  a.armR.rotation.z = 0;
+  a.upper.rotation.z = 0;
+  a.group.rotation.z = 0;
+}
+
+function animateEmote(a, now, pitch) {
+  const t = (now - a.emoteStart) / 1000;
+
+  // freeze limb baseline
+  a.legL.rotation.x = 0;
+  a.legR.rotation.x = 0;
+  a.body.position.y = a.bodyBaseY;
+  a.head.position.y = a.headBaseY;
+  a.arms.position.y = a.armsBaseY;
+  a.upper.rotation.x = 0;
+  a.upper.rotation.z = 0;
+  a.group.rotation.z = 0;
+
+  switch (a.emote) {
+    case 'wave': {
+      // right arm up, wave back and forth
+      a.armR.rotation.x = -2.6;
+      a.armR.rotation.z = Math.sin(t * 8) * 0.4;
+      a.armL.rotation.x = 0;
+      a.armL.rotation.z = 0;
+      break;
+    }
+    case 'dance': {
+      // body wiggle + alternating legs
+      const w = Math.sin(t * 6);
+      a.upper.rotation.z = w * 0.25;
+      a.group.rotation.z = w * 0.08;
+      a.legL.rotation.x =  w * 0.4;
+      a.legR.rotation.x = -w * 0.4;
+      a.armL.rotation.x = -1.2 + w * 0.5;
+      a.armR.rotation.x = -1.2 - w * 0.5;
+      break;
+    }
+    case 'taunt': {
+      // arms crossed, slight lean back
+      a.armL.rotation.x = -1.9;
+      a.armL.rotation.z = 0.6;
+      a.armR.rotation.x = -1.9;
+      a.armR.rotation.z = -0.6;
+      a.upper.rotation.x = 0.15;
+      break;
+    }
+    case 'point': {
+      // right arm straight forward
+      a.armR.rotation.x = -1.55;
+      a.armR.rotation.z = 0;
+      a.armL.rotation.x = 0;
+      break;
+    }
+  }
 }
 
 function animateFall(a, now) {
@@ -131,16 +224,19 @@ function animateFall(a, now) {
   const t = Math.min(1, elapsed / 0.5);
   const ease = 1 - Math.pow(1 - t, 3);
 
-  // fall face-first: rotate around X so the body tips forward,
-  // and lower it a bit so the head doesn't clip into the ground
   a.group.rotation.x = -Math.PI / 2 * ease;
   a.group.position.y = a.deathBaseY - 0.4 * ease;
 
-  // ease the legs and arms into a limp pose
   a.legL.rotation.x = 0;
   a.legR.rotation.x = 0;
   a.arms.rotation.x = -0.3 * (1 - ease);
   a.upper.rotation.x = 0;
+  a.armL.rotation.x = 0;
+  a.armR.rotation.x = 0;
+  a.armL.rotation.z = 0;
+  a.armR.rotation.z = 0;
+  a.upper.rotation.z = 0;
+  a.group.rotation.z = 0;
 }
 
 export function onRespawn(player) {
@@ -151,6 +247,8 @@ export function onRespawn(player) {
   }
   a.alive = true;
   a.fallStart = null;
+  a.emote = null;
+  a.emoteEndsAt = 0;
   a.group.rotation.x = 0;
   a.group.rotation.z = 0;
   a.group.position.y = player.y - PLAYER.EYE_HEIGHT + 0.9;
@@ -171,12 +269,10 @@ function create(p) {
   const armMat  = new THREE.MeshLambertMaterial({ color: colorFor(p) });
   const gunMat  = new THREE.MeshLambertMaterial({ color: 0x111114 });
 
-  // body
   const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.0, 0.4), bodyMat);
   body.position.y = 0.9;
   group.add(body);
 
-  // head sits under an "upper" pivot so we can tilt it with pitch
   const upper = new THREE.Group();
   upper.position.set(0, 1.15, 0);
   group.add(upper);
@@ -185,80 +281,19 @@ function create(p) {
   head.position.y = 0.55;
   upper.add(head);
 
-  // arms + gun also under upper so they swing together with pitch
   const arms = new THREE.Group();
   arms.position.y = 0.35;
   upper.add(arms);
 
   const armL = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.55, 0.15), armMat);
-  armL.position.set(-0.36, -0.15, -0.15);
+  armL.geometry.translate(0, -0.275, 0);
+  armL.position.set(-0.36, 0, -0.15);
   arms.add(armL);
 
   const armR = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.55, 0.15), armMat);
-  armR.position.set(0.36, -0.15, -0.15);
+  armR.geometry.translate(0, -0.275, 0);
+  armR.position.set(0.36, 0, -0.15);
   arms.add(armR);
 
   const gun = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.55), gunMat);
-  gun.position.set(0.28, -0.25, -0.35);
-  arms.add(gun);
-
-  // legs pivot from the hip
-  const legL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.7, 0.28), legMat);
-  legL.geometry.translate(0, -0.35, 0);
-  legL.position.set(-0.16, 0.7, 0);
-  group.add(legL);
-
-  const legR = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.7, 0.28), legMat);
-  legR.geometry.translate(0, -0.35, 0);
-  legR.position.set(0.16, 0.7, 0);
-  group.add(legR);
-
-  const baseY = p.y - PLAYER.EYE_HEIGHT + 0.9;
-  group.position.set(p.x, baseY, p.z);
-  getScene().add(group);
-
-  avatars.set(p.id, {
-    group,
-    body,
-    upper,
-    head,
-    arms,
-    legL,
-    legR,
-    bodyBaseY: 0.9,
-    headBaseY: 0.55,
-    armsBaseY: 0.35,
-    deathBaseY: baseY,
-    walkPhase: 0,
-    alive: p.alive !== false,
-    fallStart: p.alive === false ? performance.now() : null,
-    snapshots: [{
-      time: performance.now(),
-      x: p.x, y: p.y, z: p.z,
-      yaw: p.yaw, pitch: p.pitch,
-    }],
-  });
-}
-
-function colorFor(p) {
-  if (p.team === 'red')  return 0xc23b4a;
-  if (p.team === 'blue') return 0x3b7ac2;
-  return new THREE.Color().setHSL((p.id * 0.618) % 1, 0.55, 0.55).getHex();
-}
-
-function disposeGroup(g) {
-  g.traverse((obj) => {
-    if (obj.geometry) obj.geometry.dispose();
-    if (obj.material) {
-      if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
-      else obj.material.dispose();
-    }
-  });
-}
-
-function lerpAngle(a, b, t) {
-  let d = b - a;
-  while (d > Math.PI) d -= Math.PI * 2;
-  while (d < -Math.PI) d += Math.PI * 2;
-  return a + d * t;
-}
+  gun.position.set(0.28, -
