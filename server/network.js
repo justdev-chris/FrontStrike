@@ -1,4 +1,4 @@
-import { C2S, S2C, publicPlayer, publicMap } from '../shared/protocol.js';
+import { C2S, S2C, EMOTES, publicPlayer, publicMap } from '../shared/protocol.js';
 import { NET } from '../shared/constants.js';
 import { MAPS } from '../shared/map.js';
 import { getWeapon } from '../shared/weapons.js';
@@ -35,6 +35,7 @@ function route(ws, msg) {
     case C2S.VOTE_MODE: return onVoteMode(p, msg);
     case C2S.VOTE_MAP:  return onVoteMap(p, msg);
     case C2S.RESPAWN:   return onRespawn(p);
+    case C2S.EMOTE:     return onEmote(p, msg);
     case C2S.SET_NAME:
       p.name = String(msg.name || '').slice(0, 16);
       return;
@@ -66,6 +67,12 @@ function onJoin(ws, msg) {
 }
 
 function onInput(p, msg) {
+  // emotes cancel on any movement or fire input
+  if (p.emote) {
+    const moving = Math.abs(msg.forward) > 0.01 || Math.abs(msg.right) > 0.01;
+    if (moving) players.clearEmote(p);
+  }
+
   p.input.forward = clamp(msg.forward, -1, 1);
   p.input.right   = clamp(msg.right, -1, 1);
   p.input.jump    = !!msg.jump;
@@ -75,7 +82,6 @@ function onInput(p, msg) {
   p.lastInputSeq = msg.seq;
   p.aiming = !!msg.aiming;
 
-  // weapon switch
   if (msg.weaponId && msg.weaponId !== p.weaponId) {
     const w = getWeapon(msg.weaponId);
     if (w) {
@@ -83,20 +89,23 @@ function onInput(p, msg) {
       p.magAmmo = w.magSize;
       p.reloading = false;
       p.reloadEndsAt = 0;
+      if (p.emote) players.clearEmote(p);
     }
   }
 
-  // reload start
   if (msg.reloading && !p.reloading) {
     const w = getWeapon(p.weaponId);
     if (p.magAmmo < w.magSize) {
       p.reloading = true;
       p.reloadEndsAt = Date.now() + w.reloadMs;
+      if (p.emote) players.clearEmote(p);
     }
   }
 }
 
 function onShoot(p, msg) {
+  if (p.emote) players.clearEmote(p);
+
   const result = combat.handleShoot(p, msg.dir, msg.weaponId);
   if (!result) return;
 
@@ -131,6 +140,24 @@ function onShoot(p, msg) {
   }
 }
 
+function onEmote(p, msg) {
+  if (!p.alive) return;
+  const def = EMOTES[msg.emote];
+  if (!def) return;
+
+  // can't emote while reloading
+  if (p.reloading) return;
+
+  players.setEmote(p, def.id, def.durationMs);
+
+  broadcast({
+    type: S2C.EMOTE,
+    playerId: p.id,
+    emote: def.id,
+    endsAt: p.emoteEndsAt,
+  });
+}
+
 function onVoteMode(p, msg) {
   if (game.getState().phase !== 'vote') return;
   game.castModeVote(msg.mode);
@@ -156,18 +183,26 @@ export function startLoop() {
     const now = Date.now();
 
     for (const p of players.getAll().values()) {
-      // respawn timer
       if (!p.alive && p.respawnAt && now >= p.respawnAt) {
         players.respawn(p);
         broadcast({ type: S2C.RESPAWN, player: publicPlayer(p) });
       }
 
-      // reload completion
       if (p.reloading && now >= p.reloadEndsAt) {
         const w = getWeapon(p.weaponId);
         p.magAmmo = w.magSize;
         p.reloading = false;
         p.reloadEndsAt = 0;
+      }
+
+      if (p.emote && now >= p.emoteEndsAt) {
+        players.clearEmote(p);
+        broadcast({
+          type: S2C.EMOTE,
+          playerId: p.id,
+          emote: null,
+          endsAt: 0,
+        });
       }
     }
 
