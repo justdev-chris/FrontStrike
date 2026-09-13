@@ -1,15 +1,21 @@
 import * as THREE from 'three';
 import { getScene } from '../core/renderer.js';
 
-const tracers = [];   // { line, expires }
+// Tracers and impact sparks for remote shots.
+// Local shooting is handled in localPlayer.js.
+
+const tracers = [];
+const sparks = [];
 
 export function onShot(msg) {
   if (!msg.point) return;
   drawTracer(msg.origin, msg.point);
+  spawnImpact(msg.point);
 }
 
 export function update() {
   const now = performance.now();
+
   for (let i = tracers.length - 1; i >= 0; i--) {
     const t = tracers[i];
     if (t.expires <= now) {
@@ -19,6 +25,20 @@ export function update() {
       tracers.splice(i, 1);
     } else {
       t.line.material.opacity = (t.expires - now) / 150;
+    }
+  }
+
+  for (let i = sparks.length - 1; i >= 0; i--) {
+    const s = sparks[i];
+    if (s.expires <= now) {
+      getScene().remove(s.mesh);
+      s.mesh.geometry.dispose();
+      s.mesh.material.dispose();
+      sparks.splice(i, 1);
+    } else {
+      const k = (s.expires - now) / 220;
+      s.mesh.material.opacity = k * 0.9;
+      s.mesh.scale.setScalar(0.15 + (1 - k) * 0.25);
     }
   }
 }
@@ -36,4 +56,17 @@ function drawTracer(origin, point) {
   const line = new THREE.Line(geo, mat);
   getScene().add(line);
   tracers.push({ line, expires: performance.now() + 150 });
+}
+
+function spawnImpact(point) {
+  const geo = new THREE.SphereGeometry(0.15, 6, 6);
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0xffcc55,
+    transparent: true,
+    opacity: 0.9,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(point.x, point.y, point.z);
+  getScene().add(mesh);
+  sparks.push({ mesh, expires: performance.now() + 220 });
 }
