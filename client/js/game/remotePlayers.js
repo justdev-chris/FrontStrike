@@ -68,7 +68,6 @@ export function applySnapshot(players) {
       a.snapshots.length = 0;
     }
 
-    // server-side emote state sync (in case we missed the broadcast)
     if (p.emote !== a.emote) {
       if (p.emote) {
         a.emote = p.emote;
@@ -151,14 +150,12 @@ function animate(a, pitch, speed) {
   a.body.position.y = a.bodyBaseY + bob;
   a.head.position.y = a.headBaseY + bob;
 
-  const targetUpper = -pitch;
-  a.upper.rotation.x = targetUpper;
-
-  // arms track aim + pitch
-  a.arms.rotation.x = -pitch;
+  // head + arms tilt with camera pitch. arms are children of upper,
+  // so they inherit this rotation — do NOT double-apply.
+  a.upper.rotation.x = pitch;
+  a.arms.rotation.x = 0;
   a.arms.position.y = a.armsBaseY + bob;
 
-  // reset emote-influenced joints
   a.armL.rotation.x = 0;
   a.armL.rotation.z = 0;
   a.armR.rotation.x = 0;
@@ -170,7 +167,6 @@ function animate(a, pitch, speed) {
 function animateEmote(a, now, pitch) {
   const t = (now - a.emoteStart) / 1000;
 
-  // freeze limb baseline
   a.legL.rotation.x = 0;
   a.legR.rotation.x = 0;
   a.body.position.y = a.bodyBaseY;
@@ -182,7 +178,6 @@ function animateEmote(a, now, pitch) {
 
   switch (a.emote) {
     case 'wave': {
-      // right arm up, wave back and forth
       a.armR.rotation.x = -2.6;
       a.armR.rotation.z = Math.sin(t * 8) * 0.4;
       a.armL.rotation.x = 0;
@@ -190,7 +185,6 @@ function animateEmote(a, now, pitch) {
       break;
     }
     case 'dance': {
-      // body wiggle + alternating legs
       const w = Math.sin(t * 6);
       a.upper.rotation.z = w * 0.25;
       a.group.rotation.z = w * 0.08;
@@ -201,7 +195,6 @@ function animateEmote(a, now, pitch) {
       break;
     }
     case 'taunt': {
-      // arms crossed, slight lean back
       a.armL.rotation.x = -1.9;
       a.armL.rotation.z = 0.6;
       a.armR.rotation.x = -1.9;
@@ -210,7 +203,6 @@ function animateEmote(a, now, pitch) {
       break;
     }
     case 'point': {
-      // right arm straight forward
       a.armR.rotation.x = -1.55;
       a.armR.rotation.z = 0;
       a.armL.rotation.x = 0;
