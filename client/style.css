@@ -49,6 +49,7 @@ canvas#game {
   width: 20px;
   height: 20px;
   transform: translate(-50%, -50%);
+  transition: opacity 0.15s;
 }
 
 #crosshair::before,
@@ -91,7 +92,7 @@ canvas#game {
   opacity: 0.55;
 }
 
-#healthValue, #ammoValue {
+#healthValue {
   font-size: 32px;
   font-weight: 700;
   text-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
@@ -99,6 +100,69 @@ canvas#game {
 
 #healthValue.low {
   color: var(--red);
+}
+
+#weaponName {
+  font-size: 11px;
+  letter-spacing: 3px;
+  opacity: 0.6;
+  margin-bottom: 4px;
+}
+
+#ammoCounts {
+  font-size: 32px;
+  font-weight: 700;
+  text-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
+  line-height: 1;
+}
+
+#ammoMag {
+  color: #fff;
+}
+
+#ammoReserve {
+  font-size: 22px;
+  opacity: 0.55;
+  margin-left: 4px;
+}
+
+.ammo-sep {
+  font-size: 22px;
+  opacity: 0.4;
+  margin: 0 6px;
+}
+
+#reloadBar {
+  position: absolute;
+  right: 32px;
+  bottom: 8px;
+  width: 120px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+#reloadBar.active {
+  opacity: 1;
+}
+
+#reloadBar.active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 100%;
+  background: var(--accent);
+  animation: reloadPulse 0.9s ease-in-out infinite;
+}
+
+@keyframes reloadPulse {
+  0%, 100% { transform: translateX(-100%); }
+  50%      { transform: translateX(0); }
 }
 
 #killfeed {
@@ -153,6 +217,65 @@ canvas#game {
 #damageFlash.active {
   opacity: 1;
   transition: opacity 0s;
+}
+
+#adsVignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(circle at center,
+    transparent 35%,
+    rgba(0, 0, 0, 0.65) 100%);
+  transition: opacity 0.05s linear;
+}
+
+#scopeOverlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.05s linear;
+}
+
+#scopeCircle {
+  width: 82vh;
+  height: 82vh;
+  border-radius: 50%;
+  border: 3px solid #000;
+  box-shadow:
+    0 0 0 3px rgba(0, 0, 0, 0.9),
+    inset 0 0 60px rgba(0, 0, 0, 0.7);
+  /* clear the interior so the 3D scene shows through */
+  background: rgba(0, 0, 0, 0);
+}
+
+#scopeOverlay::before,
+#scopeOverlay::after {
+  /* crosshair lines inside the scope */
+  content: '';
+  position: absolute;
+  background: rgba(0, 0, 0, 0.85);
+}
+
+#scopeOverlay::before {
+  width: 82vh;
+  height: 1px;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+#scopeOverlay::after {
+  height: 82vh;
+  width: 1px;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
 }
 
 #scoreboard {
