@@ -35,6 +35,9 @@ const local = {
   recoilYaw: 0,
 
   lastShotAt: 0,
+
+  emote: null,
+  emoteEndsAt: 0,
 };
 
 let cachedSolids = null;
@@ -64,13 +67,15 @@ export function spawn(playerData) {
   local.alive = true;
   local.dead = false;
 
-  // restore weapon loadout
   const w = getWeapon(local.weaponId);
   local.magAmmo = w.magSize;
   local.reloading = false;
   local.aiming = false;
   local.recoilPitch = 0;
   local.recoilYaw = 0;
+
+  local.emote = null;
+  local.emoteEndsAt = 0;
 
   weaponView.setWeapon(local.weaponId);
   syncCamera();
@@ -79,11 +84,25 @@ export function spawn(playerData) {
 export function update(inputState, now) {
   if (local.dead) return;
 
-  // ---- look ----
+  // emote auto-cancel on movement or fire
+  if (local.emote) {
+    const moving = Math.abs(inputState.forward) > 0.01 || Math.abs(inputState.right) > 0.01;
+    if (moving || inputState.fire) {
+      // locally stop, tell server
+      local.emote = null;
+      local.emoteEndsAt = 0;
+      net.send({ type: 'emote', emote: null });
+    }
+    // time check
+    if (local.emote && now >= local.emoteEndsAt) {
+      local.emote = null;
+      local.emoteEndsAt = 0;
+    }
+  }
+
   const settings = getSettings();
   const baseSens = (settings?.sensitivity ?? 2.2) / 1000;
 
-  // ADS sensitivity scale: proportional to zoom
   const w = getWeapon(local.weaponId);
   const fovScale = local.aiming ? (w.adsZoom / 80) : 1;
   const sens = baseSens * fovScale;
@@ -91,24 +110,22 @@ export function update(inputState, now) {
   local.yaw   -= inputState.dx * sens;
   local.pitch -= inputState.dy * sens;
 
-  // ---- recoil offsets decay ----
   const recoverRate = 1000 / Math.max(60, w.recoilRecoverMs);
   local.recoilPitch = approach(local.recoilPitch, 0, (recoverRate / 1000) * DT * 3);
   local.recoilYaw   = approach(local.recoilYaw, 0,   (recoverRate / 1000) * DT * 3);
 
-  // effective pitch/yaw = base + recoil
   const effPitch = clamp(local.pitch + local.recoilPitch, -1.5, 1.5);
   const effYaw   = local.yaw + local.recoilYaw;
 
-  // ---- weapons / aim / fire ----
-  handleWeaponInputs(inputState, now);
+  // emote freezes aiming and firing
+  if (!local.emote) {
+    handleWeaponInputs(inputState, now);
+    if (inputState.fire && canShoot(now)) shoot(effYaw, effPitch);
+  }
 
-  // ---- movement ----
   const moveMult = local.aiming ? w.moveMultAds : 1;
   step(inputState, moveMult, effYaw);
 
-  // history records base pitch/yaw (not recoil) so reconciliation doesn't
-  // compound recoil on replay
   local.seq++;
   local.history.push({
     seq: local.seq,
@@ -135,17 +152,14 @@ export function update(inputState, now) {
     reloading: local.reloading,
   });
 
-  if (inputState.fire && canShoot(now)) shoot(effYaw, effPitch);
-
-  // viewmodel + scope
   weaponView.setAiming(local.aiming);
   weaponView.setReloading(local.reloading);
+  weaponView.setEmote(local.emote);
   weaponView.update(inputState);
   scope.update(local.aiming, local.weaponId);
 
   syncCamera(effPitch, effYaw);
 
-  // publish to shared state for HUD
   state.magAmmo = local.magAmmo;
   state.reloading = local.reloading;
   state.weaponId = local.weaponId;
@@ -153,20 +167,20 @@ export function update(inputState, now) {
 }
 
 function handleWeaponInputs(inputState, now) {
-  // weapon switch
   if (inputState.switchWeapon) {
     switchWeapon(inputState.switchWeapon);
   }
 
-  // reload
+  if (inputState.emote) {
+    triggerEmote(inputState.emote);
+  }
+
   if (inputState.reload && !local.reloading) {
     startReload(now);
   }
 
-  // aiming toggle (hold right-click)
   local.aiming = !!inputState.aim && !local.reloading;
 
-  // auto-cancel reload if we've switched weapons (switchWeapon handles)
   if (local.reloading && now >= local.reloadEndsAt) {
     finishReload();
   }
@@ -182,6 +196,28 @@ function switchWeapon(slotId) {
   local.recoilPitch = 0;
   local.recoilYaw = 0;
   weaponView.setWeapon(slotId);
+
+  // weapon switch cancels emote server-side too
+  if (local.emote) {
+    local.emote = null;
+    local.emoteEndsAt = 0;
+  }
+}
+
+export function setEmote(emoteId, endsAt) {
+  local.emote = emoteId;
+  local.emoteEndsAt = endsAt;
+}
+
+export function clearEmote() {
+  local.emote = null;
+  local.emoteEndsAt = 0;
+}
+
+function triggerEmote(emoteId) {
+  if (local.emote) return;
+  if (local.reloading) return;
+  net.send({ type: 'emote', emote: emoteId });
 }
 
 function startReload(now) {
@@ -190,6 +226,10 @@ function startReload(now) {
   local.reloading = true;
   local.reloadEndsAt = now + w.reloadMs;
   local.aiming = false;
+  if (local.emote) {
+    local.emote = null;
+    local.emoteEndsAt = 0;
+  }
 }
 
 function finishReload() {
@@ -212,11 +252,9 @@ function shoot(effYaw, effPitch) {
   local.magAmmo--;
   const w = getWeapon(local.weaponId);
 
-  // recoil kick
   local.recoilPitch += w.recoilPitch;
   local.recoilYaw   += (Math.random() * 2 - 1) * w.recoilYaw;
 
-  // send shot
   const dir = directionFromAngles(effYaw, effPitch);
   net.send({
     type: 'shoot',
@@ -227,7 +265,6 @@ function shoot(effYaw, effPitch) {
   weaponView.triggerRecoil();
   weaponView.triggerMuzzleFlash();
 
-  // auto-reload if empty
   if (local.magAmmo <= 0) {
     startReload(now);
   }
@@ -246,14 +283,19 @@ function directionFromAngles(yaw, pitch) {
 }
 
 function step(inputState, moveMult, effYaw) {
+  // emotes lock movement
+  const frozen = !!local.emote;
+  const forward = frozen ? 0 : inputState.forward;
+  const right   = frozen ? 0 : inputState.right;
+
   const speed = PLAYER.MOVE_SPEED * (inputState.sprint ? PLAYER.SPRINT_MULT : 1) * moveMult;
   const sin = Math.sin(effYaw);
   const cos = Math.cos(effYaw);
 
-  const fx = -sin * inputState.forward;
-  const fz = -cos * inputState.forward;
-  const rx =  cos * inputState.right;
-  const rz = -sin * inputState.right;
+  const fx = -sin * forward;
+  const fz = -cos * forward;
+  const rx =  cos * right;
+  const rz = -sin * right;
 
   let mx = fx + rx;
   let mz = fz + rz;
@@ -263,7 +305,7 @@ function step(inputState, moveMult, effYaw) {
   const dx = mx * speed * DT;
   const dz = mz * speed * DT;
 
-  if (inputState.jump && local.onGround) {
+  if (!frozen && inputState.jump && local.onGround) {
     local.vy = PLAYER.JUMP_VELOCITY;
     local.onGround = false;
   }
@@ -293,7 +335,6 @@ function syncCamera(effPitch, effYaw) {
   camera.rotation.x = effPitch !== undefined ? effPitch : local.pitch;
   camera.rotation.z = 0;
 
-  // ADS FOV lerp
   const w = getWeapon(local.weaponId);
   const targetFov = local.aiming ? w.adsZoom : 80;
   if (Math.abs(camera.fov - targetFov) > 0.1) {
@@ -370,6 +411,7 @@ export function applySnapshot(players, ackedSeq) {
       reload: false,
       aim: false,
       switchWeapon: null,
+      emote: null,
       dx: 0,
       dy: 0,
     }, 1, local.yaw);
@@ -384,6 +426,8 @@ export function onDeath() {
   state.alive = false;
   local.reloading = false;
   local.aiming = false;
+  local.emote = null;
+  local.emoteEndsAt = 0;
 }
 
 export function onRespawn(playerData) {
