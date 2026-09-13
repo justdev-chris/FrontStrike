@@ -6,6 +6,7 @@ let damageTimeout = null;
 let hitmarkerTimeout = null;
 let respawnTimerId = null;
 let scoreboardVisible = false;
+let emoteTimeout = null;
 
 export function init() {
   els = {
@@ -32,6 +33,7 @@ export function init() {
     tabMode:       document.getElementById('tabMode'),
     tabRedScore:   document.getElementById('tabRedScore'),
     tabBlueScore:  document.getElementById('tabBlueScore'),
+    emoteIndicator: document.getElementById('emoteIndicator'),
   };
 }
 
@@ -60,7 +62,6 @@ export function update(state) {
     els.timer.textContent = '';
   }
 
-  // ammo
   if (els.ammoMag && state.magAmmo !== undefined) {
     els.ammoMag.textContent = state.magAmmo;
     els.ammoReserve.textContent = '∞';
@@ -175,6 +176,23 @@ export function showScoreboard() {
 export function hideScoreboard() {
   scoreboardVisible = false;
   els.tabScoreboard.classList.add('hidden');
+}
+
+export function showEmote(emoteId) {
+  if (!els.emoteIndicator) return;
+  els.emoteIndicator.textContent = emoteId;
+  els.emoteIndicator.classList.remove('hidden');
+  clearTimeout(emoteTimeout);
+  emoteTimeout = setTimeout(() => {
+    els.emoteIndicator.classList.add('hidden');
+  }, 1500);
+}
+
+export function hideEmote() {
+  if (!els.emoteIndicator) return;
+  els.emoteIndicator.classList.add('hidden');
+  clearTimeout(emoteTimeout);
+  emoteTimeout = null;
 }
 
 function updateScoreboard(state) {
