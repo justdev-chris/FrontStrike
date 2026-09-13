@@ -296,4 +296,72 @@ function create(p) {
   arms.add(armR);
 
   const gun = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.55), gunMat);
-  gun.position.set(0.28, -
+  gun.position.set(0.28, -0.25, -0.35);
+  arms.add(gun);
+
+  const legL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.7, 0.28), legMat);
+  legL.geometry.translate(0, -0.35, 0);
+  legL.position.set(-0.16, 0.7, 0);
+  group.add(legL);
+
+  const legR = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.7, 0.28), legMat);
+  legR.geometry.translate(0, -0.35, 0);
+  legR.position.set(0.16, 0.7, 0);
+  group.add(legR);
+
+  const baseY = p.y - PLAYER.EYE_HEIGHT + 0.9;
+  group.position.set(p.x, baseY, p.z);
+  getScene().add(group);
+
+  avatars.set(p.id, {
+    group,
+    body,
+    upper,
+    head,
+    arms,
+    armL,
+    armR,
+    legL,
+    legR,
+    gun,
+    bodyBaseY: 0.9,
+    headBaseY: 0.55,
+    armsBaseY: 0.35,
+    deathBaseY: baseY,
+    walkPhase: 0,
+    alive: p.alive !== false,
+    fallStart: p.alive === false ? performance.now() : null,
+    aiming: false,
+    emote: p.emote || null,
+    emoteEndsAt: 0,
+    emoteStart: 0,
+    snapshots: [{
+      time: performance.now(),
+      x: p.x, y: p.y, z: p.z,
+      yaw: p.yaw, pitch: p.pitch,
+    }],
+  });
+}
+
+function colorFor(p) {
+  if (p.team === 'red')  return 0xc23b4a;
+  if (p.team === 'blue') return 0x3b7ac2;
+  return new THREE.Color().setHSL((p.id * 0.618) % 1, 0.55, 0.55).getHex();
+}
+
+function disposeGroup(g) {
+  g.traverse((obj) => {
+    if (obj.geometry) obj.geometry.dispose();
+    if (obj.material) {
+      if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+      else obj.material.dispose();
+    }
+  });
+}
+
+function lerpAngle(a, b, t) {
+  let d = b - a;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  return a + d * t;
+}
