@@ -8,6 +8,7 @@ let scoreboardHeld = false;
 
 let reloadRequested = false;
 let pendingSwitch = null;
+let pendingEmote = null;
 
 const MAX_DELTA = 100;
 
@@ -16,6 +17,13 @@ const WEAPON_KEYS = {
   Digit2: 'smg',
   Digit3: 'sniper',
   Digit4: 'pistol',
+};
+
+const EMOTE_KEYS = {
+  Digit5: 'wave',
+  Digit6: 'dance',
+  Digit7: 'taunt',
+  Digit8: 'point',
 };
 
 export function init() {
@@ -31,6 +39,10 @@ export function init() {
     }
     if (WEAPON_KEYS[e.code]) {
       pendingSwitch = WEAPON_KEYS[e.code];
+    }
+    if (EMOTE_KEYS[e.code]) {
+      console.log('emote key pressed:', e.code, EMOTE_KEYS[e.code]);
+      pendingEmote = EMOTE_KEYS[e.code];
     }
   });
 
@@ -120,6 +132,7 @@ export function sample() {
     aim: aiming,
     reload: reloadRequested,
     switchWeapon: pendingSwitch,
+    emote: pendingEmote,
     dx: mouseDX,
     dy: mouseDY,
   };
@@ -133,6 +146,7 @@ export function sample() {
   mouseDY = 0;
   reloadRequested = false;
   pendingSwitch = null;
+  pendingEmote = null;
 
   return s;
 }
