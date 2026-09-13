@@ -53,16 +53,23 @@ async function boot() {
     onSettings: () => {},
   });
 
-  // release lock during vote, re-acquire when playing
   document.addEventListener('pointerlockchange', () => {
     if (!state.joined) return;
-    if (state.phase !== 'playing') return;
     if (input.isLocked()) return;
     if (suppressPause) return;
+    if (state.phase === 'vote') return;
+    if (state.phase === 'lobby' && !state.mapId) return;
     menu.showPaused();
   });
 
-  // ESC key: deterministic pause trigger, independent of pointerlock events
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    if (!state.joined) return;
+    if (state.phase !== 'playing') return;
+    if (input.isLocked()) return;
+    menu.showPaused();
+  });
+
   window.addEventListener('keydown', (e) => {
     if (e.code !== 'Escape') return;
     if (!state.joined) return;
@@ -72,7 +79,6 @@ async function boot() {
     input.unlock();
   });
 
-  // lock request failed (browser cooldown, user clicked too fast)
   window.addEventListener('fs-lock-failed', () => {
     if (!state.joined) return;
     if (state.phase !== 'playing') return;
@@ -87,7 +93,6 @@ function requestLock() {
   clearTimeout(lockAttemptTimer);
   lockAttemptTimer = setTimeout(() => {
     suppressPause = false;
-    // if we never actually acquired lock, surface the pause menu again
     if (state.joined && state.phase === 'playing' && !input.isLocked()) {
       menu.showPaused();
     }
