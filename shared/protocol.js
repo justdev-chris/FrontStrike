@@ -6,6 +6,7 @@ export const C2S = {
   VOTE_MAP: 'voteMap',
   RESPAWN: 'respawn',
   SET_NAME: 'setName',
+  EMOTE: 'emote',
 };
 
 export const S2C = {
@@ -20,6 +21,21 @@ export const S2C = {
   RESPAWN: 'respawn',
   MATCH_STATE: 'matchState',
   KILLFEED: 'killfeed',
+  EMOTE: 'emote',
+};
+
+export const EMOTES = {
+  wave:  { id: 'wave',  name: 'Wave',  durationMs: 3000 },
+  dance: { id: 'dance', name: 'Dance', durationMs: 4000 },
+  taunt: { id: 'taunt', name: 'Taunt', durationMs: 3000 },
+  point: { id: 'point', name: 'Point', durationMs: 2500 },
+};
+
+export const EMOTE_KEYS = {
+  Digit5: 'wave',
+  Digit6: 'dance',
+  Digit7: 'taunt',
+  Digit8: 'point',
 };
 
 export function publicPlayer(p) {
@@ -36,6 +52,7 @@ export function publicPlayer(p) {
     deaths: p.deaths,
     weaponId: p.weaponId,
     aiming: p.aiming,
+    emote: p.emote,
   };
 }
 
