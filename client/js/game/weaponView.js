@@ -2,31 +2,29 @@ import * as THREE from 'three';
 import { getCamera } from '../core/renderer.js';
 import { getWeapon } from '/shared/weapons.js';
 
-// Manages the local first-person viewmodel: build, animation state machine,
-// recoil kick, ADS transition, reload dip.
-
 const state = {
   weaponId: null,
   group: null,
   parts: {},
   muzzle: null,
 
-  // animation phase — where the gun should be
   hipPos:    new THREE.Vector3(0.28, -0.22, -0.55),
   adsPos:    new THREE.Vector3(0.00, -0.10, -0.40),
   reloadPos: new THREE.Vector3(0.28, -0.55, -0.55),
+  emotePos:  new THREE.Vector3(0.28, -0.65, -0.55),
 
-  // current animated offsets
   bobPhase: 0,
   bobAmp: 0,
   recoilOffsetZ: 0,
   recoilOffsetY: 0,
   recoilRot: 0,
-  adsT: 0,              // 0 = hip, 1 = fully aimed
-  reloadT: 0,           // 0 = not reloading, 1 = fully dipped
+  adsT: 0,
+  reloadT: 0,
+  emoteT: 0,
 
   reloading: false,
   aiming: false,
+  emoting: false,
 };
 
 let clock = null;
@@ -129,6 +127,14 @@ export function setAiming(aiming) {
   state.aiming = aiming;
 }
 
+export function setReloading(reloading) {
+  state.reloading = reloading;
+}
+
+export function setEmote(emoteId) {
+  state.emoting = !!emoteId;
+}
+
 export function triggerRecoil() {
   const w = getWeapon(state.weaponId);
   if (!w) return;
@@ -143,20 +149,15 @@ export function triggerMuzzleFlash() {
   setTimeout(() => { if (state.muzzle) state.muzzle.intensity = 0; }, 45);
 }
 
-export function setReloading(reloading) {
-  state.reloading = reloading;
-}
-
 export function update(inputState) {
   if (!state.group) return;
   const w = getWeapon(state.weaponId);
   if (!w) return;
 
   const dt = clock.getDelta();
-  const now = performance.now();
 
-  // ---- ADS transition ----
-  const adsTarget = state.aiming ? 1 : 0;
+  // ---- ADS ----
+  const adsTarget = state.aiming && !state.emoting ? 1 : 0;
   const adsRate = 1000 / Math.max(60, w.adsTimeMs);
   state.adsT = approach(state.adsT, adsTarget, adsRate * dt);
 
@@ -164,9 +165,13 @@ export function update(inputState) {
   const reloadTarget = state.reloading ? 1 : 0;
   state.reloadT = approach(state.reloadT, reloadTarget, 4 * dt);
 
+  // ---- emote lower ----
+  const emoteTarget = state.emoting ? 1 : 0;
+  state.emoteT = approach(state.emoteT, emoteTarget, 5 * dt);
+
   // ---- bob ----
   const moving = inputState && (inputState.forward !== 0 || inputState.right !== 0);
-  const speedFactor = moving ? 1 : 0;
+  const speedFactor = moving && !state.emoting ? 1 : 0;
   state.bobAmp = approach(state.bobAmp, speedFactor, 4 * dt);
   state.bobPhase += dt * 8;
 
@@ -176,26 +181,29 @@ export function update(inputState) {
   state.recoilOffsetY = approach(state.recoilOffsetY, 0, recover * 0.4);
   state.recoilRot     = approach(state.recoilRot,     0, recover * 0.4);
 
-  // ---- compute final position ----
+  // ---- position ----
   const basePos = new THREE.Vector3().lerpVectors(state.hipPos, state.adsPos, state.adsT);
 
-  // reload dip offset
-  const reloadDip = state.reloadT;
-  basePos.lerp(state.reloadPos, reloadDip);
+  // reload dip
+  basePos.lerp(state.reloadPos, state.reloadT);
 
-  // bob
-  const bobX = Math.sin(state.bobPhase) * 0.012 * state.bobAmp * (1 - 0.7 * state.adsT);
-  const bobY = Math.abs(Math.cos(state.bobPhase * 2)) * 0.009 * state.bobAmp * (1 - 0.7 * state.adsT);
+  // emote lower
+  basePos.lerp(state.emotePos, state.emoteT);
 
-  // recoil
+  // bob (damped by ADS and emote)
+  const bobScale = (1 - 0.7 * state.adsT) * (1 - state.emoteT);
+  const bobX = Math.sin(state.bobPhase) * 0.012 * state.bobAmp * bobScale;
+  const bobY = Math.abs(Math.cos(state.bobPhase * 2)) * 0.009 * state.bobAmp * bobScale;
+
   basePos.z += state.recoilOffsetZ;
   basePos.y += state.recoilOffsetY;
 
   state.group.position.set(basePos.x + bobX, basePos.y + bobY, basePos.z);
 
-  // rotation: recoil pitches the gun up, reload tilts it down
-  state.group.rotation.x = state.recoilRot + reloadDip * 0.8;
-  state.group.rotation.z = reloadDip * 0.3;
+  // ---- rotation ----
+  // recoil pitches gun up; reload tilts down; emote also tilts down
+  state.group.rotation.x = state.recoilRot + state.reloadT * 0.8 + state.emoteT * 1.0;
+  state.group.rotation.z = state.reloadT * 0.3 + state.emoteT * 0.15;
 }
 
 function approach(current, target, rate) {
