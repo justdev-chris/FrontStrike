@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { getCamera } from '../core/renderer.js';
 import { PLAYER, WEAPON } from '/shared/constants.js';
+import { moveAndCollide, expandStairs } from '/shared/collision.js';
 import { state } from '../main.js';
 import { getSettings } from '../ui/menu.js';
 import * as net from '../core/net.js';
@@ -25,6 +26,19 @@ const local = {
 let viewmodel = null;
 let muzzle = null;
 let lastShotAt = 0;
+
+// cache expanded solids per map id
+let cachedSolids = null;
+let cachedMapId = null;
+
+function getSolids() {
+  const map = state.map;
+  if (!map) return [];
+  if (cachedMapId === map.id && cachedSolids) return cachedSolids;
+  cachedSolids = expandStairs(map.obstacles);
+  cachedMapId = map.id;
+  return cachedSolids;
+}
 
 export function spawn(playerData) {
   if (!playerData) return;
@@ -127,21 +141,29 @@ function step(inputState) {
   const len = Math.hypot(mx, mz);
   if (len > 1) { mx /= len; mz /= len; }
 
-  local.vx = mx * speed;
-  local.vz = mz * speed;
+  const dx = mx * speed * DT;
+  const dz = mz * speed * DT;
 
   if (inputState.jump && local.onGround) {
     local.vy = PLAYER.JUMP_VELOCITY;
     local.onGround = false;
   }
-
   local.vy -= PLAYER.GRAVITY * DT;
+  const dy = local.vy * DT;
 
-  local.x += local.vx * DT;
-  local.y += local.vy * DT;
-  local.z += local.vz * DT;
+  const next = moveAndCollide(
+    { x: local.x, y: local.y, z: local.z, vy: local.vy },
+    dx, dy, dz,
+    PLAYER.RADIUS, PLAYER.HEIGHT,
+    getSolids()
+  );
 
-  collide();
+  local.x = next.x;
+  local.y = next.y;
+  local.z = next.z;
+  local.vy = next.vy;
+  local.onGround = next.onGround;
+  if (next.onGround && local.vy < 0) local.vy = 0;
 }
 
 function shoot() {
@@ -172,57 +194,6 @@ function syncCamera() {
   camera.rotation.x = local.pitch;
   camera.rotation.z = 0;
 }
-
-function collide() {
-  const obstacles = state.map?.obstacles;
-  if (!obstacles) return;
-
-  const r = PLAYER.RADIUS;
-  const h = PLAYER.HEIGHT;
-
-  for (const box of obstacles) {
-    if (!overlapY(local.y, h, box)) continue;
-    if (overlapX(local.x, r, box) && overlapZ(local.z, r, box)) {
-      const pxL = box.x - box.w / 2 - r - local.x;
-      const pxR = box.x + box.w / 2 + r - local.x;
-      const pzB = box.z - box.d / 2 - r - local.z;
-      const pzF = box.z + box.d / 2 + r - local.z;
-      const dx = Math.abs(pxL) < Math.abs(pxR) ? pxL : pxR;
-      const dz = Math.abs(pzB) < Math.abs(pzF) ? pzB : pzF;
-      if (Math.abs(dx) < Math.abs(dz)) local.x += dx;
-      else local.z += dz;
-    }
-  }
-
-  local.onGround = false;
-  const feet = local.y - h / 2;
-  const head = local.y + h / 2;
-
-  for (const box of obstacles) {
-    const top = box.y + box.h / 2;
-    const bottom = box.y - box.h / 2;
-    if (!overlapX(local.x, r, box) || !overlapZ(local.z, r, box)) continue;
-
-    if (local.vy <= 0 && feet <= top && feet >= top - 0.5) {
-      local.y = top + h / 2;
-      local.vy = 0;
-      local.onGround = true;
-    } else if (local.vy > 0 && head >= bottom && head <= bottom + 0.5) {
-      local.y = bottom - h / 2;
-      local.vy = 0;
-    }
-  }
-
-  if (local.y - h / 2 <= 0) {
-    local.y = h / 2;
-    local.vy = 0;
-    local.onGround = true;
-  }
-}
-
-function overlapX(x, r, box) { return x + r > box.x - box.w / 2 && x - r < box.x + box.w / 2; }
-function overlapZ(z, r, box) { return z + r > box.z - box.d / 2 && z - r < box.z + box.d / 2; }
-function overlapY(y, h, box) { return y + h / 2 > box.y - box.h / 2 && y - h / 2 < box.y + box.h / 2; }
 
 export function applySnapshot(players, ackedSeq) {
   const me = players.find(p => p.id === state.myId);
