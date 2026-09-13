@@ -3,9 +3,20 @@ let mouseDX = 0;
 let mouseDY = 0;
 let locked = false;
 let firing = false;
+let aiming = false;
 let scoreboardHeld = false;
 
+let reloadRequested = false;
+let pendingSwitch = null;
+
 const MAX_DELTA = 100;
+
+const WEAPON_KEYS = {
+  Digit1: 'rifle',
+  Digit2: 'smg',
+  Digit3: 'sniper',
+  Digit4: 'pistol',
+};
 
 export function init() {
   window.addEventListener('keydown', (e) => {
@@ -14,6 +25,12 @@ export function init() {
     if (e.code === 'Tab') {
       e.preventDefault();
       scoreboardHeld = true;
+    }
+    if (e.code === 'KeyR') {
+      reloadRequested = true;
+    }
+    if (WEAPON_KEYS[e.code]) {
+      pendingSwitch = WEAPON_KEYS[e.code];
     }
   });
 
@@ -28,6 +45,7 @@ export function init() {
     scoreboardHeld = false;
     keys.clear();
     firing = false;
+    aiming = false;
   });
 
   document.addEventListener('mousemove', (e) => {
@@ -45,10 +63,16 @@ export function init() {
   document.addEventListener('mousedown', (e) => {
     if (!locked) return;
     if (e.button === 0) firing = true;
+    if (e.button === 2) aiming = true;
   });
 
   document.addEventListener('mouseup', (e) => {
     if (e.button === 0) firing = false;
+    if (e.button === 2) aiming = false;
+  });
+
+  document.addEventListener('contextmenu', (e) => {
+    if (locked) e.preventDefault();
   });
 
   document.addEventListener('pointerlockchange', () => {
@@ -57,14 +81,12 @@ export function init() {
   });
 
   document.addEventListener('pointerlockerror', () => {
-    // browser refused the lock (usually cooldown after ESC); report it
     locked = false;
     window.dispatchEvent(new CustomEvent('fs-lock-failed'));
   });
 }
 
 export function lock() {
-  // if we're already locked, don't spam the browser
   if (locked) return;
   const el = document.body;
   const req = el.requestPointerLock();
@@ -95,6 +117,9 @@ export function sample() {
     jump: keys.has('Space'),
     sprint: keys.has('ShiftLeft') || keys.has('ShiftRight'),
     fire: firing,
+    aim: aiming,
+    reload: reloadRequested,
+    switchWeapon: pendingSwitch,
     dx: mouseDX,
     dy: mouseDY,
   };
@@ -106,5 +131,8 @@ export function sample() {
 
   mouseDX = 0;
   mouseDY = 0;
+  reloadRequested = false;
+  pendingSwitch = null;
+
   return s;
 }
