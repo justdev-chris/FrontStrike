@@ -30,11 +30,13 @@ export const state = {
   timeLeft: 0,
   joined: false,
 
-  // weapon / HUD state, published by localPlayer.js
   weaponId: 'rifle',
   magAmmo: 30,
   reloading: false,
   aiming: false,
+
+  emote: null,
+  emoteEndsAt: 0,
 };
 
 let suppressPause = false;
@@ -207,6 +209,26 @@ export function onMessage(msg) {
     case 'killfeed':
       hud.addKillfeed(msg.killer, msg.victim, msg.weapon, state.players);
       break;
+
+    case 'emote': {
+      if (msg.playerId === state.myId) {
+        // local player's own emote
+        if (msg.emote) {
+          state.emote = msg.emote;
+          state.emoteEndsAt = msg.endsAt;
+          localPlayer.setEmote(msg.emote, msg.endsAt);
+          hud.showEmote(msg.emote);
+        } else {
+          state.emote = null;
+          state.emoteEndsAt = 0;
+          localPlayer.clearEmote();
+          hud.hideEmote();
+        }
+      } else {
+        remotePlayers.setEmote(msg.playerId, msg.emote, msg.endsAt);
+      }
+      break;
+    }
 
     case 'matchState':
       handleMatchState(msg);
