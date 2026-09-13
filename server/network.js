@@ -1,6 +1,7 @@
 import { C2S, S2C, publicPlayer, publicMap } from '../shared/protocol.js';
 import { NET } from '../shared/constants.js';
 import { MAPS } from '../shared/map.js';
+import { getWeapon } from '../shared/weapons.js';
 import * as players from './players.js';
 import * as game from './game.js';
 import * as combat from './combat.js';
@@ -72,15 +73,37 @@ function onInput(p, msg) {
   p.yaw   = msg.yaw;
   p.pitch = clamp(msg.pitch, -1.5, 1.5);
   p.lastInputSeq = msg.seq;
+  p.aiming = !!msg.aiming;
+
+  // weapon switch
+  if (msg.weaponId && msg.weaponId !== p.weaponId) {
+    const w = getWeapon(msg.weaponId);
+    if (w) {
+      p.weaponId = w.id;
+      p.magAmmo = w.magSize;
+      p.reloading = false;
+      p.reloadEndsAt = 0;
+    }
+  }
+
+  // reload start
+  if (msg.reloading && !p.reloading) {
+    const w = getWeapon(p.weaponId);
+    if (p.magAmmo < w.magSize) {
+      p.reloading = true;
+      p.reloadEndsAt = Date.now() + w.reloadMs;
+    }
+  }
 }
 
 function onShoot(p, msg) {
-  const result = combat.handleShoot(p, msg.dir);
+  const result = combat.handleShoot(p, msg.dir, msg.weaponId);
   if (!result) return;
 
   broadcast({
     type: S2C.SHOT,
     shooter: p.id,
+    weaponId: p.weaponId,
     origin: result.origin,
     dir: result.dir,
     hit: result.hit,
@@ -98,7 +121,12 @@ function onShoot(p, msg) {
     });
     if (!victim.alive) {
       broadcast({ type: S2C.DEATH, victim: victim.id, killer: p.id });
-      broadcast({ type: S2C.KILLFEED, killer: p.id, victim: victim.id, weapon: 'rifle' });
+      broadcast({
+        type: S2C.KILLFEED,
+        killer: p.id,
+        victim: victim.id,
+        weapon: p.weaponId,
+      });
     }
   }
 }
@@ -128,9 +156,18 @@ export function startLoop() {
     const now = Date.now();
 
     for (const p of players.getAll().values()) {
+      // respawn timer
       if (!p.alive && p.respawnAt && now >= p.respawnAt) {
         players.respawn(p);
         broadcast({ type: S2C.RESPAWN, player: publicPlayer(p) });
+      }
+
+      // reload completion
+      if (p.reloading && now >= p.reloadEndsAt) {
+        const w = getWeapon(p.weaponId);
+        p.magAmmo = w.magSize;
+        p.reloading = false;
+        p.reloadEndsAt = 0;
       }
     }
 
@@ -163,7 +200,7 @@ function broadcastVoteState() {
     mode: s.mode,
     mapId: s.mapId,
     scores: s.scores,
-    timeLeft: s.phase === 'playing' ? Math.max(0, s.matchEndTime - Date.now()) : 0,
+    matchEndTime: s.matchEndTime,
     modeVotes: s.modeVotes,
     mapVotes: s.mapVotes,
   });
