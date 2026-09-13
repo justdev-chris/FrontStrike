@@ -84,16 +84,13 @@ export function spawn(playerData) {
 export function update(inputState, now) {
   if (local.dead) return;
 
-  // emote auto-cancel on movement or fire
   if (local.emote) {
     const moving = Math.abs(inputState.forward) > 0.01 || Math.abs(inputState.right) > 0.01;
     if (moving || inputState.fire) {
-      // locally stop, tell server
       local.emote = null;
       local.emoteEndsAt = 0;
       net.send({ type: 'emote', emote: null });
     }
-    // time check
     if (local.emote && now >= local.emoteEndsAt) {
       local.emote = null;
       local.emoteEndsAt = 0;
@@ -117,7 +114,6 @@ export function update(inputState, now) {
   const effPitch = clamp(local.pitch + local.recoilPitch, -1.5, 1.5);
   const effYaw   = local.yaw + local.recoilYaw;
 
-  // emote freezes aiming and firing
   if (!local.emote) {
     handleWeaponInputs(inputState, now);
     if (inputState.fire && canShoot(now)) shoot(effYaw, effPitch);
@@ -197,7 +193,6 @@ function switchWeapon(slotId) {
   local.recoilYaw = 0;
   weaponView.setWeapon(slotId);
 
-  // weapon switch cancels emote server-side too
   if (local.emote) {
     local.emote = null;
     local.emoteEndsAt = 0;
@@ -215,6 +210,7 @@ export function clearEmote() {
 }
 
 function triggerEmote(emoteId) {
+  console.log('triggerEmote:', emoteId, 'local.emote=', local.emote, 'reloading=', local.reloading);
   if (local.emote) return;
   if (local.reloading) return;
   net.send({ type: 'emote', emote: emoteId });
@@ -283,7 +279,6 @@ function directionFromAngles(yaw, pitch) {
 }
 
 function step(inputState, moveMult, effYaw) {
-  // emotes lock movement
   const frozen = !!local.emote;
   const forward = frozen ? 0 : inputState.forward;
   const right   = frozen ? 0 : inputState.right;
