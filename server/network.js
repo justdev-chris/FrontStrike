@@ -67,7 +67,6 @@ function onJoin(ws, msg) {
 }
 
 function onInput(p, msg) {
-  // emotes cancel on any movement or fire input
   if (p.emote) {
     const moving = Math.abs(msg.forward) > 0.01 || Math.abs(msg.right) > 0.01;
     if (moving) players.clearEmote(p);
@@ -141,11 +140,23 @@ function onShoot(p, msg) {
 }
 
 function onEmote(p, msg) {
+  console.log('onEmote from', p.id, ':', msg.emote, 'alive=', p.alive, 'reloading=', p.reloading);
+
+  // null emote means "cancel"
+  if (msg.emote === null) {
+    players.clearEmote(p);
+    broadcast({
+      type: S2C.EMOTE,
+      playerId: p.id,
+      emote: null,
+      endsAt: 0,
+    });
+    return;
+  }
+
   if (!p.alive) return;
   const def = EMOTES[msg.emote];
   if (!def) return;
-
-  // can't emote while reloading
   if (p.reloading) return;
 
   players.setEmote(p, def.id, def.durationMs);
