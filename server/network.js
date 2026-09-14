@@ -115,4 +115,191 @@ function onShoot(p, msg) {
     weaponId: p.weaponId,
     origin: result.origin,
     dir: result.dir,
-    hit: result.h
+    hit: result.hit,
+    point: result.point,
+  });
+
+  if (result.hit != null) {
+    const victim = players.get(result.hit);
+    broadcast({
+      type: S2C.DAMAGE,
+      victim: victim.id,
+      amount: result.damage,
+      health: victim.health,
+      attacker: p.id,
+    });
+
+    if (result.killed) {
+      broadcast({ type: S2C.DEATH, victim: victim.id, killer: p.id });
+      broadcast({
+        type: S2C.KILLFEED,
+        killer: p.id,
+        victim: victim.id,
+        weapon: p.weaponId,
+      });
+
+      if (result.streak) {
+        broadcast({
+          type: S2C.STREAK,
+          playerId: p.id,
+          playerName: p.name,
+          count: p.streak,
+          label: result.streak,
+        });
+      }
+
+      if (result.hitLimit) {
+        game.endMatch('limit');
+        broadcastMatchState();
+      }
+    }
+  }
+}
+
+function onEmote(p, msg) {
+  if (msg.emote === null) {
+    players.clearEmote(p);
+    broadcast({
+      type: S2C.EMOTE,
+      playerId: p.id,
+      emote: null,
+      endsAt: 0,
+    });
+    return;
+  }
+
+  if (!p.alive) return;
+  const def = EMOTES[msg.emote];
+  if (!def) return;
+  if (p.reloading) return;
+
+  players.setEmote(p, def.id, def.durationMs);
+
+  broadcast({
+    type: S2C.EMOTE,
+    playerId: p.id,
+    emote: def.id,
+    endsAt: p.emoteEndsAt,
+  });
+}
+
+function onVoteMode(p, msg) {
+  if (game.getState().phase !== 'vote') return;
+  game.castModeVote(msg.mode);
+  broadcastVoteState();
+}
+
+function onVoteMap(p, msg) {
+  if (game.getState().phase !== 'vote') return;
+  game.castMapVote(msg.mapId);
+  broadcastVoteState();
+}
+
+function onRespawn(p) {
+  if (p.alive) return;
+  players.respawn(p);
+  broadcast({ type: S2C.RESPAWN, player: publicPlayer(p) });
+}
+
+export function startLoop() {
+  let lastSnapshot = 0;
+
+  setInterval(() => {
+    const now = Date.now();
+    const s = game.getState();
+
+    for (const p of players.getAll().values()) {
+      if (!p.alive && p.respawnAt && now >= p.respawnAt) {
+        players.respawn(p);
+        broadcast({ type: S2C.RESPAWN, player: publicPlayer(p) });
+      }
+
+      if (p.reloading && now >= p.reloadEndsAt) {
+        const w = getWeapon(p.weaponId);
+        p.magAmmo = w.magSize;
+        p.reloading = false;
+        p.reloadEndsAt = 0;
+      }
+
+      if (p.emote && now >= p.emoteEndsAt) {
+        players.clearEmote(p);
+        broadcast({
+          type: S2C.EMOTE,
+          playerId: p.id,
+          emote: null,
+          endsAt: 0,
+        });
+      }
+    }
+
+    if (s.phase === 'playing' && now >= s.matchEndTime) {
+      game.endMatch('time');
+      broadcastMatchState();
+    }
+
+    if (now - lastSnapshot >= SNAPSHOT_MS) {
+      lastSnapshot = now;
+      broadcast({
+        type: S2C.SNAPSHOT,
+        tick: now,
+        players: [...players.getAll().values()].map(p => ({
+          ...publicPlayer(p),
+          ackedSeq: p.lastInputSeq,
+        })),
+        healthPacks: (s.healthPacks || []).map(publicHealthPack),
+      });
+    }
+  }, 1000 / NET.TICK_RATE);
+}
+
+export function broadcast(msg) {
+  const data = JSON.stringify(msg);
+  for (const p of players.getAll().values()) {
+    if (p.ws.readyState === 1) p.ws.send(data);
+  }
+}
+
+function broadcastVoteState() {
+  const s = game.getState();
+  broadcast({
+    type: S2C.MATCH_STATE,
+    phase: s.phase,
+    mode: s.mode,
+    mapId: s.mapId,
+    scores: s.scores,
+    matchEndTime: s.matchEndTime,
+    modeVotes: s.modeVotes,
+    mapVotes: s.mapVotes,
+  });
+}
+
+export function broadcastMatchState() {
+  const s = game.getState();
+  broadcast({
+    type: S2C.MATCH_STATE,
+    phase: s.phase,
+    mode: s.mode,
+    mapId: s.mapId,
+    scores: s.scores,
+    matchEndTime: s.matchEndTime,
+    modeVotes: s.modeVotes,
+    mapVotes: s.mapVotes,
+    endReason: s.endReason,
+    winner: s.winner,
+  });
+}
+
+function send(ws, msg) {
+  if (ws.readyState === 1) ws.send(JSON.stringify(msg));
+}
+
+function findBySocket(ws) {
+  for (const p of players.getAll().values()) {
+    if (p.ws === ws) return p;
+  }
+  return null;
+}
+
+function clamp(v, a, b) {
+  return Math.max(a, Math.min(b, v));
+}
