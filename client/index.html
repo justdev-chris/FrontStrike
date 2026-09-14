@@ -11,6 +11,14 @@
 
   <div id="hud" class="hidden">
     <div id="crosshair"></div>
+
+    <div id="nameTagLayer"></div>
+
+    <div id="regenIndicator" class="hidden">
+      <span class="regen-icon">+</span>
+      <span class="regen-label">REGEN</span>
+    </div>
+
     <div id="health">
       <span class="label">HP</span>
       <span id="healthValue">100</span>
@@ -68,6 +76,11 @@
     </div>
   </div>
 
+  <div id="announcement" class="hidden">
+    <div id="announcementText"></div>
+    <div id="announcementFrom"></div>
+  </div>
+
   <div id="deathOverlay" class="hidden">
     <div class="death-title">ELIMINATED</div>
     <div id="deathKiller"></div>
@@ -89,6 +102,69 @@
 
       <div class="end-footer">
         <div class="end-hint">Next match begins shortly</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="adminPanel" class="hidden">
+    <div class="admin-header">
+      <span>ADMIN</span>
+      <button id="adminClose" class="admin-close">×</button>
+    </div>
+
+    <div class="admin-section">
+      <div class="admin-label">Aimbot</div>
+      <button id="adminAimbot" class="admin-toggle">OFF</button>
+    </div>
+
+    <div class="admin-section">
+      <div class="admin-label">Give Weapon</div>
+      <div class="admin-row">
+        <select id="adminWeapon">
+          <option value="rifle">Rifle</option>
+          <option value="smg">SMG</option>
+          <option value="shotgun">Shotgun</option>
+          <option value="sniper">Sniper</option>
+          <option value="pistol">Pistol</option>
+          <option value="rpg">RPG</option>
+        </select>
+        <input id="adminWeaponTarget" type="text" placeholder="target (blank = self)" />
+        <button id="adminGive">Give</button>
+      </div>
+    </div>
+
+    <div class="admin-section">
+      <div class="admin-label">Slap</div>
+      <div class="admin-row">
+        <input id="adminSlapTarget" type="text" placeholder="target" />
+        <button id="adminSlap">Slap</button>
+      </div>
+    </div>
+
+    <div class="admin-section">
+      <div class="admin-label">Kick</div>
+      <div class="admin-row">
+        <input id="adminKickTarget" type="text" placeholder="target" />
+        <button id="adminKick">Kick</button>
+      </div>
+    </div>
+
+    <div class="admin-section">
+      <div class="admin-label">Teleport</div>
+      <div class="admin-row">
+        <input id="adminTpTarget" type="text" placeholder="target (blank = self)" />
+        <input id="adminTpX" type="number" placeholder="x" step="0.1" />
+        <input id="adminTpY" type="number" placeholder="y" step="0.1" />
+        <input id="adminTpZ" type="number" placeholder="z" step="0.1" />
+        <button id="adminTp">TP</button>
+      </div>
+    </div>
+
+    <div class="admin-section">
+      <div class="admin-label">Announce</div>
+      <div class="admin-row">
+        <input id="adminAnnounceText" type="text" placeholder="message" maxlength="200" />
+        <button id="adminAnnounce">Send</button>
       </div>
     </div>
   </div>
@@ -118,10 +194,10 @@
         <div class="menu-footer">
           <div class="footer-key">WASD <span>move</span></div>
           <div class="footer-key">SHIFT <span>sprint</span></div>
+          <div class="footer-key">CTRL <span>slide</span></div>
           <div class="footer-key">SPACE <span>jump</span></div>
           <div class="footer-key">RMB <span>aim</span></div>
-          <div class="footer-key">1-4 <span>weapons</span></div>
-          <div class="footer-key">5-8 <span>emotes</span></div>
+          <div class="footer-key">1-5 <span>weapons</span></div>
           <div class="footer-key">R <span>reload</span></div>
           <div class="footer-key">TAB <span>scores</span></div>
         </div>
@@ -154,7 +230,7 @@
     <div class="menu-backdrop heavy"></div>
     <div class="prompt-panel">
       <h2>Identify</h2>
-      <input id="nameInput" type="text" placeholder="callsign" maxlength="16" autocomplete="off" />
+      <input id="nameInput" type="text" placeholder="callsign" maxlength="20" autocomplete="off" />
       <div class="prompt-buttons">
         <button id="nameConfirm" class="menu-action primary">
           <span class="action-label">Confirm</span>
