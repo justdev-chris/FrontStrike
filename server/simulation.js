@@ -7,6 +7,10 @@ const DT = 1 / NET.TICK_RATE;
 const JUMP_BUFFER_TICKS = 3;
 const COYOTE_TICKS = 3;
 
+const HEALTH_PACK_RADIUS = 1.2;
+const HEALTH_PACK_AMOUNT = 40;
+const HEALTH_PACK_RESPAWN_MS = 12000;
+
 const expandedCache = new Map();
 
 function getSolids(map) {
@@ -19,6 +23,7 @@ function getSolids(map) {
 export function tick() {
   const map = game.getMap();
   const solids = getSolids(map);
+  const state = game.getState();
 
   for (const p of players.getAll().values()) {
     if (!p.alive) continue;
@@ -76,4 +81,63 @@ export function tick() {
     if (p.onGround) p.coyote = COYOTE_TICKS;
     else p.coyote = Math.max(0, p.coyote - 1);
   }
+
+  tickHealthPacks(state, now());
+}
+
+function now() {
+  return Date.now();
+}
+
+function tickHealthPacks(state, time) {
+  if (!state.healthPacks) return;
+
+  // respawn timers
+  for (const hp of state.healthPacks) {
+    if (!hp.active && hp.respawnAt && time >= hp.respawnAt) {
+      hp.active = true;
+      hp.respawnAt = 0;
+    }
+  }
+
+  // pickup checks
+  for (const p of players.getAll().values()) {
+    if (!p.alive) continue;
+    if (p.health >= PLAYER.MAX_HEALTH) continue;
+
+    for (const hp of state.healthPacks) {
+      if (!hp.active) continue;
+
+      const dx = p.x - hp.x;
+      const dy = (p.y - PLAYER.HEIGHT / 2) - hp.y;
+      const dz = p.z - hp.z;
+      const d2 = dx * dx + dy * dy + dz * dz;
+
+      if (d2 > HEALTH_PACK_RADIUS * HEALTH_PACK_RADIUS) continue;
+
+      p.health = Math.min(PLAYER.MAX_HEALTH, p.health + HEALTH_PACK_AMOUNT);
+      hp.active = false;
+      hp.respawnAt = time + HEALTH_PACK_RESPAWN_MS;
+
+      // broadcast immediately so clients see it
+      broadcastHealthPack(hp);
+      break;
+    }
+  }
+}
+
+function broadcastHealthPack(hp) {
+  // lazy import to avoid a cycle
+  import('./network.js').then(net => {
+    net.broadcast({
+      type: 'healthPack',
+      pack: {
+        id: hp.id,
+        x: hp.x,
+        y: hp.y,
+        z: hp.z,
+        active: hp.active,
+      },
+    });
+  }).catch(() => {});
 }
