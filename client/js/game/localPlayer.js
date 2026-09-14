@@ -6,6 +6,7 @@ import { moveAndCollide, expandStairs } from '/shared/collision.js';
 import { state } from '../main.js';
 import { getSettings } from '../ui/menu.js';
 import * as net from '../core/net.js';
+import * as audio from '../core/audio.js';
 import * as weaponView from './weaponView.js';
 import * as scope from './scope.js';
 
@@ -210,7 +211,6 @@ export function clearEmote() {
 }
 
 function triggerEmote(emoteId) {
-  console.log('triggerEmote:', emoteId, 'local.emote=', local.emote, 'reloading=', local.reloading);
   if (local.emote) return;
   if (local.reloading) return;
   net.send({ type: 'emote', emote: emoteId });
@@ -226,6 +226,7 @@ function startReload(now) {
     local.emote = null;
     local.emoteEndsAt = 0;
   }
+  audio.play('reload', { volume: 0.6 });
 }
 
 function finishReload() {
@@ -256,6 +257,12 @@ function shoot(effYaw, effPitch) {
     type: 'shoot',
     weaponId: local.weaponId,
     dir: { x: dir.x, y: dir.y, z: dir.z },
+  });
+
+  // local gunshot — non-positional, slightly quieter than world shots
+  audio.play(w.sound, {
+    volume: 0.7,
+    pitchVariance: 0.04,
   });
 
   weaponView.triggerRecoil();
