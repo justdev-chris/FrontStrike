@@ -103,7 +103,6 @@ canvas#game {
 #healthValue {
   font-size: 34px;
   font-weight: 300;
-  letter-spacing: 0.02em;
 }
 
 #healthValue.low { color: var(--red); }
@@ -174,6 +173,46 @@ canvas#game {
   color: var(--accent);
   text-transform: uppercase;
   animation: fadeIn 0.2s;
+}
+
+/* ---------- Kill streak banner ---------- */
+
+#streakBanner {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+}
+
+#streakBanner.play {
+  animation: streakPop 2.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.streak-player {
+  font-size: 14px;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  margin-bottom: 6px;
+}
+
+.streak-label {
+  font-size: 40px;
+  font-weight: 200;
+  letter-spacing: 0.35em;
+  color: var(--accent);
+  text-shadow: 0 0 40px rgba(80, 255, 140, 0.6);
+  white-space: nowrap;
+}
+
+@keyframes streakPop {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.85); }
+  12%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  80%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.03); }
 }
 
 #killfeed {
@@ -290,6 +329,7 @@ canvas#game {
 #scoreLine { font-weight: 500; }
 #scoreLine .red { color: var(--red); }
 #scoreLine .blue { color: var(--blue); }
+#scoreLine .vs { opacity: 0.35; margin: 0 2px; }
 
 #timer {
   font-size: 11px;
@@ -509,8 +549,6 @@ canvas#game {
   background: rgba(4, 6, 8, 0.75);
 }
 
-/* ---------- Main menu layout ---------- */
-
 #menu .menu-grid {
   position: relative;
   display: grid;
@@ -532,8 +570,6 @@ canvas#game {
   justify-content: space-between;
   max-width: 620px;
 }
-
-/* ---- Brand ---- */
 
 .menu-brand h1 {
   font-size: 76px;
@@ -562,8 +598,6 @@ canvas#game {
   color: var(--ink-dim);
   text-transform: uppercase;
 }
-
-/* ---- Actions ---- */
 
 .menu-actions {
   display: flex;
@@ -622,15 +656,7 @@ canvas#game {
   transform: translateX(0);
 }
 
-.menu-action.primary {
-  border-color: var(--accent-dim);
-}
-
-.menu-action.primary:hover {
-  background: transparent;
-}
-
-/* ---- Footer keys ---- */
+.menu-action.primary { border-color: var(--accent-dim); }
 
 .menu-footer {
   display: grid;
@@ -643,16 +669,8 @@ canvas#game {
   margin-top: 48px;
 }
 
-.footer-key {
-  display: flex;
-  gap: 8px;
-}
-
-.footer-key span {
-  color: var(--ink-dim);
-}
-
-/* ---- Right column ---- */
+.footer-key { display: flex; gap: 8px; }
+.footer-key span { color: var(--ink-dim); }
 
 .menu-right {
   display: flex;
@@ -801,9 +819,7 @@ canvas#game {
   gap: 10px;
 }
 
-.prompt-buttons .menu-action {
-  flex: 1;
-}
+.prompt-buttons .menu-action { flex: 1; }
 
 .setting-row {
   display: grid;
