@@ -7,6 +7,13 @@ let hitmarkerTimeout = null;
 let respawnTimerId = null;
 let scoreboardVisible = false;
 let emoteTimeout = null;
+let streakTimeout = null;
+
+// animated team scores
+let displayRedScore = 0;
+let displayBlueScore = 0;
+let targetRedScore = 0;
+let targetBlueScore = 0;
 
 export function init() {
   els = {
@@ -34,6 +41,7 @@ export function init() {
     tabRedScore:   document.getElementById('tabRedScore'),
     tabBlueScore:  document.getElementById('tabBlueScore'),
     emoteIndicator: document.getElementById('emoteIndicator'),
+    streakBanner:  document.getElementById('streakBanner'),
   };
 }
 
@@ -45,10 +53,13 @@ export function update(state) {
   els.healthValue.classList.toggle('low', state.health <= 25);
 
   if (state.mode === 'tdm') {
+    targetRedScore = state.scoreboard.red;
+    targetBlueScore = state.scoreboard.blue;
+    animateScores();
     els.scoreLine.innerHTML =
-      `<span class="red">${state.scoreboard.red}</span>` +
-      ` &nbsp;—&nbsp; ` +
-      `<span class="blue">${state.scoreboard.blue}</span>`;
+      `<span class="red">${displayRedScore}</span>` +
+      ` <span class="vs">—</span> ` +
+      `<span class="blue">${displayBlueScore}</span>`;
   } else {
     els.scoreLine.textContent = `KILLS ${state.kills} / DEATHS ${state.deaths}`;
   }
@@ -58,6 +69,8 @@ export function update(state) {
     const m = Math.floor(s / 60);
     const sec = String(s % 60).padStart(2, '0');
     els.timer.textContent = `${m}:${sec}`;
+  } else if (state.phase === 'ended' && state.timeLeft <= 0) {
+    els.timer.textContent = 'MATCH OVER';
   } else {
     els.timer.textContent = '';
   }
@@ -74,6 +87,13 @@ export function update(state) {
   }
 
   if (scoreboardVisible) updateScoreboard(state);
+}
+
+function animateScores() {
+  if (displayRedScore < targetRedScore) displayRedScore++;
+  else if (displayRedScore > targetRedScore) displayRedScore--;
+  if (displayBlueScore < targetBlueScore) displayBlueScore++;
+  else if (displayBlueScore > targetBlueScore) displayBlueScore--;
 }
 
 export function addKillfeed(killerId, victimId, weapon, players) {
@@ -100,9 +120,9 @@ function renderKillfeed() {
     const div = document.createElement('div');
     div.className = 'entry';
     div.innerHTML =
-      `<span class="killer">${entry.killer}</span>` +
+      `<span class="killer">${escapeHtml(entry.killer)}</span>` +
       ` ▸ ` +
-      `<span class="victim">${entry.victim}</span>`;
+      `<span class="victim">${escapeHtml(entry.victim)}</span>`;
     els.killfeed.appendChild(div);
   }
 }
@@ -139,9 +159,26 @@ export function flashDamage() {
 export function showKill(victimName) {
   const banner = document.createElement('div');
   banner.className = 'kill-banner';
-  banner.innerHTML = `ELIMINATED <span class="victim-name">${victimName}</span>`;
+  banner.innerHTML = `ELIMINATED <span class="victim-name">${escapeHtml(victimName)}</span>`;
   els.hud.appendChild(banner);
   setTimeout(() => banner.remove(), 1200);
+}
+
+export function showStreak(playerName, label) {
+  if (!els.streakBanner) return;
+  els.streakBanner.innerHTML =
+    `<div class="streak-player">${escapeHtml(playerName)}</div>` +
+    `<div class="streak-label">${escapeHtml(label)}</div>`;
+  els.streakBanner.classList.remove('hidden');
+  // restart animation
+  els.streakBanner.classList.remove('play');
+  void els.streakBanner.offsetWidth;
+  els.streakBanner.classList.add('play');
+  clearTimeout(streakTimeout);
+  streakTimeout = setTimeout(() => {
+    els.streakBanner.classList.add('hidden');
+    els.streakBanner.classList.remove('play');
+  }, 2500);
 }
 
 export function showDeath(killerName, respawnMs) {
@@ -235,9 +272,16 @@ function renderColumn(container, players, state) {
     if (!p.alive) row.classList.add('dead');
 
     row.innerHTML =
-      `<span class="sb-name">${p.name}</span>` +
+      `<span class="sb-name">${escapeHtml(p.name)}</span>` +
       `<span class="sb-kd">${p.kills} / ${p.deaths}</span>`;
 
     container.appendChild(row);
   }
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
