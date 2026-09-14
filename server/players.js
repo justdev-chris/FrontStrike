@@ -43,6 +43,7 @@ export function create(ws, name) {
 
     kills: 0,
     deaths: 0,
+    streak: 0,
 
     lastInputSeq: 0,
     inputHistory: [],
@@ -57,6 +58,9 @@ export function create(ws, name) {
 
     emote: null,
     emoteEndsAt: 0,
+
+    jumpBuffer: 0,
+    coyote: 0,
   };
 
   players.set(id, player);
@@ -123,12 +127,14 @@ export function respawn(p) {
 
   p.emote = null;
   p.emoteEndsAt = 0;
+
+  // streak is preserved across respawn
+  // (it's cleared on death in combat.applyDamage, not here)
 }
 
 export function setEmote(p, emoteId, durationMs) {
   p.emote = emoteId;
   p.emoteEndsAt = Date.now() + durationMs;
-  // emoting cancels reload and aim
   p.reloading = false;
   p.reloadEndsAt = 0;
   p.aiming = false;
