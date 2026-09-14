@@ -4,6 +4,7 @@ import { getMaterialTiled } from './textures.js';
 
 let group = null;
 let currentMapId = null;
+const healthPackMeshes = new Map();
 
 export function build(map) {
   if (!map) return;
@@ -12,12 +13,13 @@ export function build(map) {
   if (group) {
     getScene().remove(group);
     disposeGroup(group);
+    group = null;
+    healthPackMeshes.clear();
   }
 
   group = new THREE.Group();
   currentMapId = map.id;
 
-  // floor — tiled plane
   const floorMat = getMaterialTiled(floorMatFor(map), map.mapSize / 2, map.mapSize / 2);
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(map.mapSize, map.mapSize),
@@ -26,22 +28,20 @@ export function build(map) {
   floor.rotation.x = -Math.PI / 2;
   group.add(floor);
 
-  // grid overlay
   const grid = new THREE.GridHelper(map.mapSize, map.mapSize / 4, 0x000000, 0x000000);
   grid.position.y = 0.005;
   grid.material.opacity = 0.08;
   grid.material.transparent = true;
   group.add(grid);
 
-  // solids
   for (const s of map.obstacles) {
     if (s.type === 'ramp') addRamp(s);
     else if (s.type === 'stairs') addStairs(s);
     else addBox(s);
   }
 
-  // spawn pad markers
   addSpawnPads(map.spawns);
+  addHealthPacks(map.healthPacks || []);
 
   getScene().add(group);
 }
@@ -50,21 +50,82 @@ export function getCurrentMapId() {
   return currentMapId;
 }
 
-// ---------- builders ----------
+export function updateHealthPacks(packs) {
+  if (!packs || !group) return;
+  for (const hp of packs) {
+    const mesh = healthPackMeshes.get(hp.id);
+    if (!mesh) continue;
+
+    mesh.visible = !!hp.active;
+    if (hp.active) {
+      // keep the position in sync (shouldn't change, but cheap)
+      mesh.position.set(hp.x, hp.y + 0.5, hp.z);
+    }
+  }
+}
+
+function addHealthPacks(list) {
+  for (let i = 0; i < list.length; i++) {
+    const hp = list[i];
+    const mesh = createHealthPackMesh();
+    mesh.position.set(hp.x, hp.y + 0.5, hp.z);
+    group.add(mesh);
+    healthPackMeshes.set(i, mesh);
+  }
+}
+
+function createHealthPackMesh() {
+  const g = new THREE.Group();
+
+  // white cross box
+  const bodyMat = new THREE.MeshLambertMaterial({ color: 0xf5f5f5 });
+  const crossMat = new THREE.MeshLambertMaterial({ color: 0xe3354a });
+
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.55), bodyMat);
+  g.add(body);
+
+  const crossA = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.2, 0.16), crossMat);
+  crossA.position.z = 0.29;
+  g.add(crossA);
+
+  const crossB = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.6, 0.16), crossMat);
+  crossB.position.z = 0.29;
+  g.add(crossB);
+
+  const crossC = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.2, 0.6), crossMat);
+  crossC.position.x = 0.29;
+  g.add(crossC);
+
+  const crossD = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.6, 0.6), crossMat);
+  crossD.position.x = 0.29;
+  g.add(crossD);
+
+  // soft glow ring under it
+  const glow = new THREE.Mesh(
+    new THREE.RingGeometry(0.55, 0.85, 24),
+    new THREE.MeshBasicMaterial({
+      color: 0x4f8,
+      transparent: true,
+      opacity: 0.28,
+      side: THREE.DoubleSide,
+    })
+  );
+  glow.rotation.x = -Math.PI / 2;
+  glow.position.y = -0.4;
+  g.add(glow);
+
+  return g;
+}
 
 function addBox(s) {
   const geo = new THREE.BoxGeometry(s.w, s.h, s.d);
-
-  // tiling: roughly one texture tile per 2 units
   const repU = Math.max(1, Math.round(Math.max(s.w, s.d) / 2));
   const repV = Math.max(1, Math.round(s.h / 2));
   const mat = getMaterialTiled(s.mat || 'concrete', repU, repV);
-
   const mesh = new THREE.Mesh(geo, mat);
   mesh.position.set(s.x, s.y, s.z);
   group.add(mesh);
 
-  // edge outline for readability
   const edges = new THREE.LineSegments(
     new THREE.EdgesGeometry(geo),
     edgeLineFor(s.mat)
@@ -74,37 +135,16 @@ function addBox(s) {
 }
 
 function addRamp(s) {
-  // Build a wedge geometry. Footprint w x d, height rises from 0 to s.h
-  // along `axis`, direction `dir`.
   const geo = new THREE.BufferGeometry();
-
   const hw = s.w / 2;
   const hd = s.d / 2;
 
-  // eight corners — bottom flat, top sloped
-  // local coords centered on footprint, y = 0 at low end, s.h at high end
-  const lowY = 0;
-  const highY = s.h;
-
-  // Work out which local corner is low vs high along `axis`
-  let lowX, highX, lowZ, highZ;
-  if (s.axis === 'x') {
-    // slope runs along X. low end at -X if dir=+1, +X if dir=-1.
-    if (s.dir > 0) { lowX = -hw; highX = hw; } else { lowX = hw; highX = -hw; }
-    lowZ = -hd; highZ = hd;
-  } else {
-    if (s.dir > 0) { lowZ = -hd; highZ = hd; } else { lowZ = hd; highZ = -hd; }
-    lowX = -hw; highX = hw;
-  }
-
-  // verts: 4 bottom (y=lowY, full footprint), 4 top (sloped)
   const v = [];
-  // bottom
-  v.push(-hw, lowY, -hd);
-  v.push( hw, lowY, -hd);
-  v.push( hw, lowY,  hd);
-  v.push(-hw, lowY,  hd);
-  // top — height interpolates along axis
+  v.push(-hw, 0, -hd);
+  v.push( hw, 0, -hd);
+  v.push( hw, 0,  hd);
+  v.push(-hw, 0,  hd);
+
   const topHeights = cornerHeights(s);
   v.push(-hw, topHeights[0], -hd);
   v.push( hw, topHeights[1], -hd);
@@ -114,37 +154,28 @@ function addRamp(s) {
   const positions = new Float32Array(v);
   geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
-  // indices for faces — box-like, but top is sloped
   const idx = [
-    // bottom
     0, 2, 1,  0, 3, 2,
-    // top
     4, 5, 6,  4, 6, 7,
-    // sides
-    0, 1, 5,  0, 5, 4,   // -Z face
-    1, 2, 6,  1, 6, 5,   // +X face
-    2, 3, 7,  2, 7, 6,   // +Z face
-    3, 0, 4,  3, 4, 7,   // -X face
+    0, 1, 5,  0, 5, 4,
+    1, 2, 6,  1, 6, 5,
+    2, 3, 7,  2, 7, 6,
+    3, 0, 4,  3, 4, 7,
   ];
   geo.setIndex(idx);
   geo.computeVertexNormals();
 
-  // texture UVs — one tile per 2 units on each axis
   const uvs = new Float32Array([
     0, 0,  1, 0,  1, 1,  0, 1,
     0, 0,  1, 0,  1, 1,  0, 1,
   ]);
-  // crude UV mapping is fine for flat/sloped surfaces
   geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
 
   const mat = getMaterialTiled(s.mat || 'metal', Math.max(1, s.w / 2), Math.max(1, s.d / 2));
   const mesh = new THREE.Mesh(geo, mat);
-
-  // position at footprint center, with y offset so lowest corner is at s.y
   mesh.position.set(s.x, s.y, s.z);
   group.add(mesh);
 
-  // edges
   const edges = new THREE.LineSegments(
     new THREE.EdgesGeometry(geo),
     edgeLineFor(s.mat)
@@ -153,22 +184,16 @@ function addRamp(s) {
   group.add(edges);
 }
 
-// Corner heights for a ramp. Order matches top verts: [-hw,-hd], [hw,-hd], [hw,hd], [-hw,hd]
 function cornerHeights(s) {
   const h = s.h;
-  // t goes 0..1 along `axis` in the direction of slope
   const zAlong = s.axis === 'z';
   const xAlong = s.axis === 'x';
   const dir = s.dir;
 
   const tFor = (x, z) => {
-    // x, z are in local space (-half..+half)
     let t;
-    if (xAlong) {
-      t = (x + s.w / 2) / s.w;      // 0 at -X, 1 at +X
-    } else {
-      t = (z + s.d / 2) / s.d;      // 0 at -Z, 1 at +Z
-    }
+    if (xAlong) t = (x + s.w / 2) / s.w;
+    else t = (z + s.d / 2) / s.d;
     if (dir < 0) t = 1 - t;
     return t;
   };
@@ -182,14 +207,12 @@ function cornerHeights(s) {
 }
 
 function addStairs(s) {
-  // stairs render as a stack of N boxes stepping up along `axis`
   const n = Math.max(1, s.steps | 0);
   const stepH = s.h / n;
   const run = (s.axis === 'x' ? s.w : s.d) / n;
 
   for (let i = 0; i < n; i++) {
-    const t = i / n;
-    let off = -( (s.axis === 'x' ? s.w : s.d) / 2 ) + run * (i + 0.5);
+    let off = -((s.axis === 'x' ? s.w : s.d) / 2) + run * (i + 0.5);
     if (s.dir < 0) off = -off;
 
     const cx = s.axis === 'x' ? s.x + off : s.x;
@@ -199,12 +222,7 @@ function addStairs(s) {
     const w = s.axis === 'x' ? run : s.w;
     const d = s.axis === 'z' ? run : s.d;
 
-    addBox({
-      type: 'box',
-      x: cx, y: cy, z: cz,
-      w, h: stepH, d,
-      mat: s.mat,
-    });
+    addBox({ type: 'box', x: cx, y: cy, z: cz, w, h: stepH, d, mat: s.mat });
   }
 }
 
@@ -231,8 +249,6 @@ function addSpawnPads(spawns) {
   }
 }
 
-// ---------- helpers ----------
-
 function floorMatFor(map) {
   switch (map.id) {
     case 'pillars': return 'sand';
@@ -244,7 +260,6 @@ function floorMatFor(map) {
 }
 
 function edgeLineFor(mat) {
-  // darker edges for dark surfaces, lighter for bright
   const color =
     mat === 'sand'   ? 0x8a7350 :
     mat === 'wood'   ? 0x3a2414 :
