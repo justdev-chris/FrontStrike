@@ -8,7 +8,6 @@ const tracers = [];
 const sparks = [];
 
 export function onShot(msg) {
-  // play positional gunshot at the shooter's position
   const shooter = state.players.get(msg.shooter);
   if (shooter) {
     const w = getWeapon(msg.weaponId || 'rifle');
