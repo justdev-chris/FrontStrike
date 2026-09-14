@@ -11,8 +11,9 @@ const state = {
   mapVotes: {},
   matchStartTime: 0,
   matchEndTime: 0,
-  endReason: null,        // 'time' | 'limit' | null
-  winner: null,           // 'red' | 'blue' | playerId (for dm) | 'tie' | null
+  endReason: null,
+  winner: null,
+  healthPacks: [],
 };
 
 export function getState() {
@@ -27,6 +28,19 @@ export function setPhase(phase) { state.phase = phase; }
 export function setMode(mode)   { state.mode = mode; }
 export function setMap(id)      { if (MAPS[id]) state.mapId = id; }
 
+export function initHealthPacks() {
+  const map = getMap();
+  const list = map.healthPacks || [];
+  state.healthPacks = list.map((hp, i) => ({
+    id: i,
+    x: hp.x,
+    y: hp.y,
+    z: hp.z,
+    active: true,
+    respawnAt: 0,
+  }));
+}
+
 export function startMatch(now) {
   state.scores.red = 0;
   state.scores.blue = 0;
@@ -35,6 +49,7 @@ export function startMatch(now) {
   state.phase = 'playing';
   state.endReason = null;
   state.winner = null;
+  initHealthPacks();
 }
 
 export function endMatch(reason = 'time') {
@@ -50,7 +65,6 @@ function computeWinner() {
     if (blue > red) return 'blue';
     return 'tie';
   }
-  // DM: highest kills
   let best = null;
   let bestKills = -1;
   let tie = false;
@@ -73,7 +87,6 @@ export function addKill(killerTeam) {
   else if (killerTeam === 'blue') state.scores.blue++;
 }
 
-// Returns true if the kill just hit the match limit.
 export function checkKillLimit(killer) {
   if (state.mode === 'tdm') {
     if (state.scores.red >= MATCH.KILL_LIMIT) return true;
@@ -103,7 +116,6 @@ export function tallyModeVotes() {
 export function tallyMapVotes() {
   const total = Object.values(state.mapVotes).reduce((a, b) => a + b, 0);
   if (total === 0) return state.mapId;
-
   let best = state.mapId;
   let bestCount = -1;
   for (const id of Object.keys(MAPS)) {
