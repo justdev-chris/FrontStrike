@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { getCamera } from '../core/renderer.js';
-import { PLAYER } from '/shared/constants.js';
+import { PLAYER, SLIDE } from '/shared/constants.js';
 import { getWeapon } from '/shared/weapons.js';
 import { moveAndCollide, expandStairs } from '/shared/collision.js';
 import { state } from '../main.js';
@@ -28,6 +28,8 @@ const local = {
   alive: true,
   dead: false,
 
+  height: PLAYER.HEIGHT,
+
   weaponId: 'rifle',
   magAmmo: 30,
   reloading: false,
@@ -41,6 +43,10 @@ const local = {
 
   emote: null,
   emoteEndsAt: 0,
+
+  sliding: false,
+  slideEndsAt: 0,
+  slideCooldownUntil: 0,
 
   jumpBuffer: 0,
   coyote: 0,
@@ -74,6 +80,10 @@ export function spawn(playerData) {
   local.dead = false;
   local.jumpBuffer = 0;
   local.coyote = 0;
+  local.height = PLAYER.HEIGHT;
+  local.sliding = false;
+  local.slideEndsAt = 0;
+  local.slideCooldownUntil = 0;
 
   const w = getWeapon(local.weaponId);
   local.magAmmo = w.magSize;
@@ -128,7 +138,7 @@ export function update(inputState, now) {
   }
 
   const moveMult = local.aiming ? w.moveMultAds : 1;
-  step(inputState, moveMult, effYaw);
+  step(inputState, moveMult, effYaw, now);
 
   local.seq++;
   local.history.push({
@@ -139,6 +149,7 @@ export function update(inputState, now) {
     right: inputState.right,
     jump: inputState.jump,
     sprint: inputState.sprint,
+    crouch: inputState.crouch,
   });
   while (local.history.length > MAX_HISTORY) local.history.shift();
 
@@ -149,6 +160,7 @@ export function update(inputState, now) {
     right: inputState.right,
     jump: inputState.jump,
     sprint: inputState.sprint,
+    crouch: inputState.crouch,
     yaw: effYaw,
     pitch: effPitch,
     aiming: local.aiming,
@@ -159,6 +171,7 @@ export function update(inputState, now) {
   weaponView.setAiming(local.aiming);
   weaponView.setReloading(local.reloading);
   weaponView.setEmote(local.emote);
+  weaponView.setSliding(local.sliding);
   weaponView.update(inputState);
   scope.update(local.aiming, local.weaponId);
 
@@ -168,6 +181,8 @@ export function update(inputState, now) {
   state.reloading = local.reloading;
   state.weaponId = local.weaponId;
   state.aiming = local.aiming;
+  state.sliding = local.sliding;
+  state.regenerating = !!(state.health < 100 && local.lastDamageAt && now - local.lastDamageAt > 5000);
 }
 
 function handleWeaponInputs(inputState, now) {
@@ -183,7 +198,7 @@ function handleWeaponInputs(inputState, now) {
     startReload(now);
   }
 
-  local.aiming = !!inputState.aim && !local.reloading;
+  local.aiming = !!inputState.aim && !local.reloading && !local.sliding;
 
   if (local.reloading && now >= local.reloadEndsAt) {
     finishReload();
@@ -192,8 +207,11 @@ function handleWeaponInputs(inputState, now) {
 
 function switchWeapon(slotId) {
   if (slotId === local.weaponId) return;
-  local.weaponId = slotId;
   const w = getWeapon(slotId);
+  if (!w) return;
+  if (w.adminOnly && !state.isAdmin) return;
+
+  local.weaponId = slotId;
   local.magAmmo = w.magSize;
   local.reloading = false;
   local.aiming = false;
@@ -244,6 +262,7 @@ function finishReload() {
 
 function canShoot(now) {
   if (local.reloading) return false;
+  if (local.sliding) return false;
   const w = getWeapon(local.weaponId);
   if (local.magAmmo <= 0) return false;
   if (now - local.lastShotAt < w.fireRateMs) return false;
@@ -291,39 +310,51 @@ function directionFromAngles(yaw, pitch) {
   };
 }
 
-function step(inputState, moveMult, effYaw) {
+function step(inputState, moveMult, effYaw, now) {
   const frozen = !!local.emote;
-  const forward = frozen ? 0 : inputState.forward;
-  const right   = frozen ? 0 : inputState.right;
-  const jumpHeld = !frozen && inputState.jump;
+
+  tickSlide(inputState, now);
+
+  const sliding = local.sliding;
+  const forward = frozen || sliding ? 0 : inputState.forward;
+  const right   = frozen || sliding ? 0 : inputState.right;
+  const jumpHeld = !frozen && !sliding && inputState.jump;
 
   const speed = PLAYER.MOVE_SPEED * (inputState.sprint ? PLAYER.SPRINT_MULT : 1) * moveMult;
   const sin = Math.sin(effYaw);
   const cos = Math.cos(effYaw);
 
-  const fx = -sin * forward;
-  const fz = -cos * forward;
-  const rx =  cos * right;
-  const rz = -sin * right;
+  let dx = 0, dz = 0;
 
-  let mx = fx + rx;
-  let mz = fz + rz;
-  const len = Math.hypot(mx, mz);
-  if (len > 1) { mx /= len; mz /= len; }
+  if (!sliding) {
+    const fx = -sin * forward;
+    const fz = -cos * forward;
+    const rx =  cos * right;
+    const rz = -sin * right;
 
-  const dx = mx * speed * DT;
-  const dz = mz * speed * DT;
+    let mx = fx + rx;
+    let mz = fz + rz;
+    const len = Math.hypot(mx, mz);
+    if (len > 1) { mx /= len; mz /= len; }
 
-  // jump buffer: remember the input for a few frames
+    local.vx = mx * speed;
+    local.vz = mz * speed;
+    dx = local.vx * DT;
+    dz = local.vz * DT;
+  } else {
+    dx = local.vx * DT;
+    dz = local.vz * DT;
+  }
+
   if (jumpHeld) local.jumpBuffer = JUMP_BUFFER_FRAMES;
   else local.jumpBuffer = Math.max(0, local.jumpBuffer - 1);
 
-  // jump fires if we have buffered input AND (on ground OR coyote time active)
   if (local.jumpBuffer > 0 && (local.onGround || local.coyote > 0)) {
     local.vy = PLAYER.JUMP_VELOCITY;
     local.onGround = false;
     local.coyote = 0;
     local.jumpBuffer = 0;
+    local.sliding = false;
   }
 
   local.vy -= PLAYER.GRAVITY * DT;
@@ -334,7 +365,7 @@ function step(inputState, moveMult, effYaw) {
   const next = moveAndCollide(
     { x: local.x, y: local.y, z: local.z, vy: local.vy },
     dx, dy, dz,
-    PLAYER.RADIUS, PLAYER.HEIGHT,
+    PLAYER.RADIUS, local.height,
     getSolids(),
     wasGrounded
   );
@@ -346,15 +377,55 @@ function step(inputState, moveMult, effYaw) {
   local.onGround = next.onGround;
   if (next.onGround && local.vy < 0) local.vy = 0;
 
-  // coyote time: keep it alive for a few frames after leaving ground
   if (local.onGround) local.coyote = COYOTE_FRAMES;
   else local.coyote = Math.max(0, local.coyote - 1);
+}
+
+function tickSlide(inputState, now) {
+  const wantSlide = inputState.crouch && inputState.sprint && !local.sliding;
+  const speed = Math.hypot(local.vx, local.vz);
+  const canSlide =
+    wantSlide &&
+    now >= local.slideCooldownUntil &&
+    local.onGround &&
+    speed >= SLIDE.TRIGGER_MIN_SPEED;
+
+  if (canSlide) {
+    local.sliding = true;
+    local.slideEndsAt = now + SLIDE.DURATION_MS;
+    if (speed > 0.01) {
+      const boost = 1 + (SLIDE.INITIAL_BOOST - 1) * 0.6;
+      local.vx *= boost;
+      local.vz *= boost;
+    }
+  }
+
+  if (!local.sliding) return;
+
+  const expired = now >= local.slideEndsAt;
+  const notCrouching = !inputState.crouch;
+  const tooSlow = Math.hypot(local.vx, local.vz) < SLIDE.MIN_SPEED_TO_KEEP;
+
+  if (expired || notCrouching || tooSlow || !local.onGround) {
+    local.sliding = false;
+    local.slideCooldownUntil = now + SLIDE.COOLDOWN_MS;
+    local.height = PLAYER.HEIGHT;
+    return;
+  }
+
+  local.vx *= SLIDE.FRICTION;
+  local.vz *= SLIDE.FRICTION;
+
+  local.height = PLAYER.CROUCH_HEIGHT;
 }
 
 function syncCamera(effPitch, effYaw) {
   const camera = getCamera();
   camera.rotation.order = 'YXZ';
-  camera.position.set(local.x, local.y, local.z);
+
+  const camY = local.y - (PLAYER.EYE_HEIGHT - local.height / 2);
+
+  camera.position.set(local.x, camY, local.z);
   camera.rotation.y = effYaw !== undefined ? effYaw : local.yaw;
   camera.rotation.x = effPitch !== undefined ? effPitch : local.pitch;
   camera.rotation.z = 0;
@@ -378,6 +449,10 @@ export function applySnapshot(players, ackedSeq) {
   state.alive = me.alive;
   state.kills = me.kills;
   state.deaths = me.deaths;
+
+  if (me.lastDamageAt === undefined) {
+    // server doesn't send it in publicPlayer yet; we approximate on client
+  }
 
   if (!me.alive) return;
 
@@ -431,6 +506,7 @@ export function applySnapshot(players, ackedSeq) {
       right: h.right,
       jump: h.jump,
       sprint: h.sprint,
+      crouch: h.crouch,
       fire: false,
       reload: false,
       aim: false,
@@ -438,7 +514,7 @@ export function applySnapshot(players, ackedSeq) {
       emote: null,
       dx: 0,
       dy: 0,
-    }, 1, local.yaw);
+    }, 1, local.yaw, performance.now());
   }
 
   syncCamera();
@@ -454,6 +530,8 @@ export function onDeath() {
   local.emoteEndsAt = 0;
   local.jumpBuffer = 0;
   local.coyote = 0;
+  local.sliding = false;
+  local.height = PLAYER.HEIGHT;
 }
 
 export function onRespawn(playerData) {
