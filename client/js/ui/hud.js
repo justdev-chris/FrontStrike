@@ -9,7 +9,6 @@ let scoreboardVisible = false;
 let emoteTimeout = null;
 let streakTimeout = null;
 
-// animated team scores
 let displayRedScore = 0;
 let displayBlueScore = 0;
 let targetRedScore = 0;
@@ -42,6 +41,11 @@ export function init() {
     tabBlueScore:  document.getElementById('tabBlueScore'),
     emoteIndicator: document.getElementById('emoteIndicator'),
     streakBanner:  document.getElementById('streakBanner'),
+
+    endScreen:     document.getElementById('endScreen'),
+    endTitle:      document.getElementById('endTitle'),
+    endSubtitle:   document.getElementById('endSubtitle'),
+    endLeaderboard: document.getElementById('endLeaderboard'),
   };
 }
 
@@ -69,7 +73,7 @@ export function update(state) {
     const m = Math.floor(s / 60);
     const sec = String(s % 60).padStart(2, '0');
     els.timer.textContent = `${m}:${sec}`;
-  } else if (state.phase === 'ended' && state.timeLeft <= 0) {
+  } else if (state.phase === 'ended') {
     els.timer.textContent = 'MATCH OVER';
   } else {
     els.timer.textContent = '';
@@ -170,7 +174,6 @@ export function showStreak(playerName, label) {
     `<div class="streak-player">${escapeHtml(playerName)}</div>` +
     `<div class="streak-label">${escapeHtml(label)}</div>`;
   els.streakBanner.classList.remove('hidden');
-  // restart animation
   els.streakBanner.classList.remove('play');
   void els.streakBanner.offsetWidth;
   els.streakBanner.classList.add('play');
@@ -230,6 +233,89 @@ export function hideEmote() {
   els.emoteIndicator.classList.add('hidden');
   clearTimeout(emoteTimeout);
   emoteTimeout = null;
+}
+
+// ---------- end-of-match screen ----------
+
+export function showEndScreen(state) {
+  if (!els.endScreen) return;
+
+  const { winner, mode, players, myId, endReason } = state;
+
+  // title + subtitle
+  let title = 'MATCH OVER';
+  let subtitle = endReason === 'limit' ? 'Kill limit reached' : 'Time expired';
+
+  if (winner === 'tie') {
+    title = 'DRAW';
+  } else if (winner === 'red' || winner === 'blue') {
+    title = `${winner.toUpperCase()} WINS`;
+    const myTeam = players.get(myId)?.team;
+    if (myTeam === winner) subtitle += ' — your team won';
+    else if (myTeam) subtitle += ' — your team lost';
+  } else if (typeof winner === 'number') {
+    const p = players.get(winner);
+    title = p ? `${p.name} WINS` : 'MATCH OVER';
+    subtitle += winner === myId ? ' — you won' : '';
+  }
+
+  els.endTitle.textContent = title;
+  els.endTitle.className = 'end-title';
+  if (winner === 'red') els.endTitle.classList.add('red');
+  if (winner === 'blue') els.endTitle.classList.add('blue');
+
+  els.endSubtitle.textContent = subtitle;
+
+  // leaderboard — sorted by kills, then fewer deaths
+  const list = [...players.values()];
+  list.sort((a, b) => {
+    if (b.kills !== a.kills) return b.kills - a.kills;
+    return a.deaths - b.deaths;
+  });
+
+  els.endLeaderboard.innerHTML = '';
+
+  // header row
+  const header = document.createElement('div');
+  header.className = 'lb-row header';
+  header.innerHTML =
+    `<span class="lb-rank">#</span>` +
+    `<span class="lb-name">PLAYER</span>` +
+    `<span class="lb-team">TEAM</span>` +
+    `<span class="lb-k">K</span>` +
+    `<span class="lb-d">D</span>` +
+    `<span class="lb-kd">K/D</span>`;
+  els.endLeaderboard.appendChild(header);
+
+  let rank = 1;
+  for (const p of list) {
+    const kd = p.deaths === 0 ? p.kills.toFixed(2) : (p.kills / p.deaths).toFixed(2);
+    const row = document.createElement('div');
+    row.className = 'lb-row';
+    if (p.id === myId) row.classList.add('self');
+    if (rank === 1) row.classList.add('top');
+
+    const teamClass = p.team === 'red' ? 'red' : p.team === 'blue' ? 'blue' : 'ffa';
+    const teamLabel = p.team === 'ffa' ? '—' : p.team.toUpperCase();
+
+    row.innerHTML =
+      `<span class="lb-rank">${rank}</span>` +
+      `<span class="lb-name">${escapeHtml(p.name)}</span>` +
+      `<span class="lb-team"><span class="team-dot ${teamClass}"></span>${teamLabel}</span>` +
+      `<span class="lb-k">${p.kills}</span>` +
+      `<span class="lb-d">${p.deaths}</span>` +
+      `<span class="lb-kd">${kd}</span>`;
+
+    els.endLeaderboard.appendChild(row);
+    rank++;
+  }
+
+  els.endScreen.classList.remove('hidden');
+}
+
+export function hideEndScreen() {
+  if (!els.endScreen) return;
+  els.endScreen.classList.add('hidden');
 }
 
 function updateScoreboard(state) {
