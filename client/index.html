@@ -42,7 +42,6 @@
         <span class="tab-title">SCOREBOARD</span>
         <span id="tabMode">DEATHMATCH</span>
       </div>
-
       <div class="tab-teams">
         <div class="tab-team red-team">
           <div class="tab-team-header">
@@ -51,7 +50,6 @@
           </div>
           <div id="tabRed" class="tab-rows"></div>
         </div>
-
         <div class="tab-team blue-team">
           <div class="tab-team-header">
             <span class="tab-team-name">BLUE</span>
@@ -59,7 +57,6 @@
           </div>
           <div id="tabBlue" class="tab-rows"></div>
         </div>
-
         <div class="tab-team ffa-team">
           <div class="tab-team-header">
             <span class="tab-team-name">PLAYERS</span>
@@ -78,54 +75,74 @@
 
   <div id="menu">
     <div class="menu-backdrop"></div>
+    <div class="menu-grid">
 
-    <div class="menu-content">
-      <div class="menu-header">
-        <h1>FRONTSTRIKE</h1>
-        <p class="subtitle">multiplayer fps</p>
-      </div>
-
-      <div class="menu-main">
-        <div class="menu-buttons">
-          <button id="playBtn" class="menu-btn primary">PLAY</button>
-          <button id="settingsBtn" class="menu-btn">SETTINGS</button>
+      <div class="menu-left">
+        <div class="menu-brand">
+          <h1>FRONT<span>STRIKE</span></h1>
+          <div class="brand-rule"></div>
+          <p class="brand-sub">tactical multiplayer fps</p>
         </div>
 
-        <div class="menu-status">
-          <div class="status-block">
-            <div class="status-label">MODE</div>
-            <div class="status-value" id="menuMode">dm</div>
-          </div>
-          <div class="status-block">
-            <div class="status-label">MAP</div>
-            <div class="status-value" id="menuMap">crossfire</div>
-          </div>
-          <div class="status-block">
-            <div class="status-label">PLAYERS</div>
-            <div class="status-value" id="menuCount">0</div>
-          </div>
+        <div class="menu-actions">
+          <button id="playBtn" class="menu-action primary">
+            <span class="action-label">Deploy</span>
+            <span class="action-arrow">→</span>
+          </button>
+          <button id="settingsBtn" class="menu-action">
+            <span class="action-label">Settings</span>
+            <span class="action-arrow">→</span>
+          </button>
         </div>
 
-        <div class="menu-online">
-          <div class="online-header">ONLINE</div>
-          <ul id="menuPlayers" class="online-list"></ul>
+        <div class="menu-footer">
+          <div class="footer-key">WASD <span>move</span></div>
+          <div class="footer-key">SHIFT <span>sprint</span></div>
+          <div class="footer-key">SPACE <span>jump</span></div>
+          <div class="footer-key">RMB <span>aim</span></div>
+          <div class="footer-key">1-4 <span>weapons</span></div>
+          <div class="footer-key">5-8 <span>emotes</span></div>
+          <div class="footer-key">R <span>reload</span></div>
+          <div class="footer-key">TAB <span>scores</span></div>
         </div>
       </div>
 
-      <div class="menu-footer">
-        <p class="hint">WASD move • shift sprint • space jump • click fire • rmb aim • 1-4 weapons • 5-8 emotes • r reload • tab scoreboard • esc pause</p>
+      <div class="menu-right">
+        <div class="side-block">
+          <div class="side-label">Mode</div>
+          <div class="side-value" id="menuMode">—</div>
+        </div>
+        <div class="side-block">
+          <div class="side-label">Map</div>
+          <div class="side-value" id="menuMap">—</div>
+        </div>
+        <div class="side-block">
+          <div class="side-label">Players</div>
+          <div class="side-value" id="menuCount">0</div>
+        </div>
+
+        <div class="side-roster">
+          <div class="side-label">Online</div>
+          <ul id="menuPlayers" class="roster-list"></ul>
+        </div>
       </div>
+
     </div>
   </div>
 
   <div id="namePrompt" class="hidden">
     <div class="menu-backdrop heavy"></div>
     <div class="prompt-panel">
-      <h2>ENTER CALLSIGN</h2>
+      <h2>Identify</h2>
       <input id="nameInput" type="text" placeholder="callsign" maxlength="16" autocomplete="off" />
       <div class="prompt-buttons">
-        <button id="nameConfirm" class="menu-btn primary">DEPLOY</button>
-        <button id="nameCancel" class="menu-btn">CANCEL</button>
+        <button id="nameConfirm" class="menu-action primary">
+          <span class="action-label">Confirm</span>
+          <span class="action-arrow">→</span>
+        </button>
+        <button id="nameCancel" class="menu-action">
+          <span class="action-label">Back</span>
+        </button>
       </div>
     </div>
   </div>
@@ -133,7 +150,7 @@
   <div id="settingsPanel" class="hidden">
     <div class="menu-backdrop heavy"></div>
     <div class="prompt-panel">
-      <h2>SETTINGS</h2>
+      <h2>Settings</h2>
       <div class="setting-row">
         <label for="sensSlider">Sensitivity</label>
         <input id="sensSlider" type="range" min="0.5" max="5" step="0.1" value="2.2" />
@@ -145,23 +162,23 @@
         <span id="fovValue">80</span>
       </div>
       <div class="prompt-buttons">
-        <button id="settingsClose" class="menu-btn primary">CLOSE</button>
+        <button id="settingsClose" class="menu-action primary">
+          <span class="action-label">Close</span>
+        </button>
       </div>
     </div>
   </div>
 
   <div id="vote" class="hidden">
     <div class="menu-backdrop heavy"></div>
-    <div class="menu-content compact">
-      <div class="menu-header">
-        <h2>VOTE</h2>
-      </div>
+    <div class="vote-panel">
+      <h2>Next Match</h2>
       <div class="vote-section">
-        <h3>MODE</h3>
+        <div class="side-label">Mode</div>
         <div id="modeVote" class="vote-options"></div>
       </div>
       <div class="vote-section">
-        <h3>MAP</h3>
+        <div class="side-label">Map</div>
         <div id="mapVote" class="vote-options"></div>
       </div>
     </div>
@@ -170,9 +187,12 @@
   <div id="paused" class="hidden">
     <div class="menu-backdrop heavy"></div>
     <div class="prompt-panel">
-      <h2>PAUSED</h2>
+      <h2>Paused</h2>
       <div class="prompt-buttons">
-        <button id="resumeBtn" class="menu-btn primary">RESUME</button>
+        <button id="resumeBtn" class="menu-action primary">
+          <span class="action-label">Resume</span>
+          <span class="action-arrow">→</span>
+        </button>
       </div>
     </div>
   </div>
