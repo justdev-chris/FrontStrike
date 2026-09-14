@@ -23,6 +23,7 @@ export const S2C = {
   KILLFEED: 'killfeed',
   EMOTE: 'emote',
   STREAK: 'streak',
+  HEALTH_PACK: 'healthPack',
 };
 
 export const EMOTES = {
@@ -39,7 +40,6 @@ export const EMOTE_KEYS = {
   Digit8: 'point',
 };
 
-// Kill streak thresholds and their display names.
 export const STREAKS = {
   3: 'KILLING SPREE',
   5: 'RAMPAGE',
@@ -72,5 +72,16 @@ export function publicMap(map) {
     name: map.name,
     mapSize: map.mapSize,
     obstacles: map.obstacles,
+    healthPacks: map.healthPacks || [],
+  };
+}
+
+export function publicHealthPack(hp) {
+  return {
+    id: hp.id,
+    x: hp.x,
+    y: hp.y,
+    z: hp.z,
+    active: hp.active,
   };
 }
