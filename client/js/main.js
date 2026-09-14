@@ -7,11 +7,14 @@ import * as mapBuilder from './game/mapBuilder.js';
 import * as localPlayer from './game/localPlayer.js';
 import * as remotePlayers from './game/remotePlayers.js';
 import * as weapons from './game/weapons.js';
+import * as projectiles from './game/projectiles.js';
 import * as weaponView from './game/weaponView.js';
 import * as scope from './game/scope.js';
+import * as nameTags from './game/nameTags.js';
 
 import * as hud from './ui/hud.js';
 import * as menu from './ui/menu.js';
+import * as admin from './ui/admin.js';
 
 import { PLAYER } from '/shared/constants.js';
 
@@ -30,11 +33,13 @@ export const state = {
   matchEndTime: 0,
   timeLeft: 0,
   joined: false,
+  isAdmin: false,
 
   weaponId: 'rifle',
   magAmmo: 30,
   reloading: false,
   aiming: false,
+  sliding: false,
 
   emote: null,
   emoteEndsAt: 0,
@@ -43,6 +48,9 @@ export const state = {
   endReason: null,
 
   healthPacks: [],
+  projectiles: [],
+
+  regenerating: false,
 };
 
 let suppressPause = false;
@@ -56,6 +64,7 @@ async function boot() {
   weaponView.init();
   scope.init();
   audio.init();
+  nameTags.init();
 
   menu.init({
     onPlay: async (name) => {
@@ -73,6 +82,11 @@ async function boot() {
       requestLock();
     },
     onSettings: () => {},
+  });
+
+  admin.init({
+    getState: () => state,
+    send: (msg) => net.send(msg),
   });
 
   document.addEventListener('pointerlockchange', () => {
@@ -93,12 +107,16 @@ async function boot() {
   });
 
   window.addEventListener('keydown', (e) => {
-    if (e.code !== 'Escape') return;
-    if (!state.joined) return;
-    if (state.phase !== 'playing') return;
-    if (menu.isPaused()) return;
-    menu.showPaused();
-    input.unlock();
+    if (e.code === 'Escape') {
+      if (!state.joined) return;
+      if (state.phase !== 'playing') return;
+      if (menu.isPaused()) return;
+      menu.showPaused();
+      input.unlock();
+    }
+    if (e.code === 'Backquote' && state.isAdmin) {
+      admin.toggle();
+    }
   });
 
   window.addEventListener('fs-lock-failed', () => {
@@ -138,6 +156,7 @@ export function onMessage(msg) {
       state.mode = msg.mode;
       state.mapId = msg.mapId;
       state.map = msg.map;
+      state.isAdmin = !!msg.isAdmin;
       state.players.clear();
       for (const p of msg.players) state.players.set(p.id, p);
       state.healthPacks = msg.healthPacks || [];
@@ -183,6 +202,11 @@ export function onMessage(msg) {
         mapBuilder.updateHealthPacks(msg.healthPacks);
       }
 
+      if (msg.projectiles) {
+        state.projectiles = msg.projectiles;
+        projectiles.syncFromSnapshot(msg.projectiles);
+      }
+
       const me = msg.players.find(p => p.id === state.myId);
       const ackedSeq = me ? me.ackedSeq : undefined;
 
@@ -193,20 +217,32 @@ export function onMessage(msg) {
     }
 
     case 'healthPack': {
-      // single-pack update
       const pack = msg.pack;
       if (pack) {
         const idx = state.healthPacks.findIndex(hp => hp.id === pack.id);
         if (idx >= 0) state.healthPacks[idx] = pack;
         else state.healthPacks.push(pack);
         mapBuilder.updateHealthPacks(state.healthPacks);
-
-        if (pack.active === false && state.healthPacks.length) {
-          // optional: play a small "consumed" sound if you're close
-        }
       }
       break;
     }
+
+    case 'projectileSpawn':
+      projectiles.spawn(msg.projectile);
+      break;
+
+    case 'projectileUpdate':
+      projectiles.update(msg.projectile);
+      break;
+
+    case 'projectileEnd':
+      projectiles.end(msg.id);
+      break;
+
+    case 'explosion':
+      projectiles.explode(msg.x, msg.y, msg.z, msg.weaponId);
+      audio.play('gunshot_rpg', { volume: 0.9 });
+      break;
 
     case 'shot':
       weapons.onShot(msg);
@@ -254,6 +290,16 @@ export function onMessage(msg) {
 
     case 'streak':
       hud.showStreak(msg.playerName, msg.label);
+      break;
+
+    case 'announce':
+      hud.showAnnouncement(msg.text, msg.from);
+      break;
+
+    case 'adminResult':
+      if (msg.action === 'kicked') {
+        console.warn('[admin] you have been kicked:', msg.reason);
+      }
       break;
 
     case 'emote': {
@@ -334,6 +380,8 @@ function frame(now) {
   localPlayer.update(inputState, now);
   remotePlayers.update(now);
   weapons.update(now);
+  projectiles.update(now);
+  nameTags.update();
 
   audio.updateListener();
 
