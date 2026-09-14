@@ -11,6 +11,8 @@ const state = {
   mapVotes: {},
   matchStartTime: 0,
   matchEndTime: 0,
+  endReason: null,        // 'time' | 'limit' | null
+  winner: null,           // 'red' | 'blue' | playerId (for dm) | 'tie' | null
 };
 
 export function getState() {
@@ -31,16 +33,55 @@ export function startMatch(now) {
   state.matchStartTime = now;
   state.matchEndTime = now + MATCH.DURATION_MS;
   state.phase = 'playing';
+  state.endReason = null;
+  state.winner = null;
 }
 
-export function endMatch() {
+export function endMatch(reason = 'time') {
   state.phase = 'ended';
+  state.endReason = reason;
+  state.winner = computeWinner();
+}
+
+function computeWinner() {
+  if (state.mode === 'tdm') {
+    const { red, blue } = state.scores;
+    if (red > blue) return 'red';
+    if (blue > red) return 'blue';
+    return 'tie';
+  }
+  // DM: highest kills
+  let best = null;
+  let bestKills = -1;
+  let tie = false;
+  for (const p of state.players.values()) {
+    if (p.kills > bestKills) {
+      bestKills = p.kills;
+      best = p.id;
+      tie = false;
+    } else if (p.kills === bestKills) {
+      tie = true;
+    }
+  }
+  if (best === null) return null;
+  return tie ? 'tie' : best;
 }
 
 export function addKill(killerTeam) {
   if (state.mode !== 'tdm') return;
   if (killerTeam === 'red') state.scores.red++;
   else if (killerTeam === 'blue') state.scores.blue++;
+}
+
+// Returns true if the kill just hit the match limit.
+export function checkKillLimit(killer) {
+  if (state.mode === 'tdm') {
+    if (state.scores.red >= MATCH.KILL_LIMIT) return true;
+    if (state.scores.blue >= MATCH.KILL_LIMIT) return true;
+  } else {
+    if (killer.kills >= MATCH.KILL_LIMIT) return true;
+  }
+  return false;
 }
 
 export function castModeVote(mode) {
