@@ -38,6 +38,9 @@ export const state = {
 
   emote: null,
   emoteEndsAt: 0,
+
+  winner: null,
+  endReason: null,
 };
 
 let suppressPause = false;
@@ -54,7 +57,6 @@ async function boot() {
 
   menu.init({
     onPlay: async (name) => {
-      // user gesture: unlock audio and load buffers
       audio.resume();
       audio.loadAll();
 
@@ -224,6 +226,10 @@ export function onMessage(msg) {
       hud.addKillfeed(msg.killer, msg.victim, msg.weapon, state.players);
       break;
 
+    case 'streak':
+      hud.showStreak(msg.playerName, msg.label);
+      break;
+
     case 'emote': {
       if (msg.playerId === state.myId) {
         if (msg.emote) {
@@ -257,6 +263,8 @@ function handleMatchState(msg) {
   if (typeof msg.matchEndTime === 'number') {
     state.matchEndTime = msg.matchEndTime;
   }
+  if (msg.winner !== undefined) state.winner = msg.winner;
+  if (msg.endReason !== undefined) state.endReason = msg.endReason;
 
   if (msg.phase === 'vote') {
     menu.showVote(msg);
@@ -271,7 +279,12 @@ function handleMatchState(msg) {
     requestLock();
   }
 
-  if (msg.phase !== 'playing' && msg.phase !== 'vote') {
+  if (msg.phase === 'ended' && prevPhase === 'playing') {
+    // future: end-of-match screen hook here
+    input.unlock();
+  }
+
+  if (msg.phase !== 'playing' && msg.phase !== 'vote' && msg.phase !== 'ended') {
     if (!state.joined) menu.show();
   }
 
@@ -295,7 +308,6 @@ function frame(now) {
   remotePlayers.update(now);
   weapons.update(now);
 
-  // keep Web Audio listener aligned with the camera
   audio.updateListener();
 
   state.timeLeft = computeTimeLeft();
