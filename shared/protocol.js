@@ -7,6 +7,7 @@ export const C2S = {
   RESPAWN: 'respawn',
   SET_NAME: 'setName',
   EMOTE: 'emote',
+  ADMIN_ACTION: 'adminAction',
 };
 
 export const S2C = {
@@ -24,6 +25,13 @@ export const S2C = {
   EMOTE: 'emote',
   STREAK: 'streak',
   HEALTH_PACK: 'healthPack',
+  PROJECTILE_SPAWN: 'projectileSpawn',
+  PROJECTILE_UPDATE: 'projectileUpdate',
+  PROJECTILE_END: 'projectileEnd',
+  EXPLOSION: 'explosion',
+  ANNOUNCE: 'announce',
+  ADMIN_RESULT: 'adminResult',
+  AFFECTED: 'affected',
 };
 
 export const EMOTES = {
@@ -47,6 +55,14 @@ export const STREAKS = {
   10: 'UNSTOPPABLE',
 };
 
+export const ADMIN_ACTIONS = {
+  KICK: 'kick',
+  SLAP: 'slap',
+  TELEPORT: 'teleport',
+  GIVE_WEAPON: 'giveWeapon',
+  ANNOUNCE: 'announce',
+};
+
 export function publicPlayer(p) {
   return {
     id: p.id,
@@ -63,6 +79,8 @@ export function publicPlayer(p) {
     aiming: p.aiming,
     emote: p.emote,
     streak: p.streak || 0,
+    sliding: !!p.sliding,
+    isAdmin: !!p.isAdmin,
   };
 }
 
@@ -83,5 +101,15 @@ export function publicHealthPack(hp) {
     y: hp.y,
     z: hp.z,
     active: hp.active,
+  };
+}
+
+export function publicProjectile(pr) {
+  return {
+    id: pr.id,
+    ownerId: pr.ownerId,
+    weaponId: pr.weaponId,
+    x: pr.x, y: pr.y, z: pr.z,
+    vx: pr.vx, vy: pr.vy, vz: pr.vz,
   };
 }
