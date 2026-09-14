@@ -1,4 +1,4 @@
-import { PLAYER } from '../shared/constants.js';
+import { PLAYER, ADMIN } from '../shared/constants.js';
 import { getWeapon, DEFAULT_WEAPON } from '../shared/weapons.js';
 import * as game from './game.js';
 
@@ -19,14 +19,17 @@ export function create(ws, name) {
   const id = nextId++;
   const state = game.getState();
 
+  const cleanName = sanitizeName(name) || `Player${id}`;
+  const isAdmin = cleanName === ADMIN.NAME;
   const team = state.mode === 'tdm' ? pickTeam() : 'ffa';
   const spawn = pickSpawn(team);
-  const weapon = getWeapon(DEFAULT_WEAPON);
+  const weapon = getWeapon(isAdmin ? DEFAULT_WEAPON : DEFAULT_WEAPON);
 
   const player = {
     id,
     ws,
-    name: sanitizeName(name) || `Player${id}`,
+    name: cleanName,
+    isAdmin,
     team,
 
     x: spawn.x,
@@ -37,9 +40,12 @@ export function create(ws, name) {
     pitch: 0,
     onGround: true,
 
+    height: PLAYER.HEIGHT,
+
     health: PLAYER.MAX_HEALTH,
     alive: true,
     lastShotAt: 0,
+    lastDamageAt: 0,
 
     kills: 0,
     deaths: 0,
@@ -48,7 +54,7 @@ export function create(ws, name) {
     lastInputSeq: 0,
     inputHistory: [],
 
-    input: { forward: 0, right: 0, jump: false, sprint: false },
+    input: { forward: 0, right: 0, jump: false, sprint: false, crouch: false },
 
     weaponId: weapon.id,
     magAmmo: weapon.magSize,
@@ -59,8 +65,14 @@ export function create(ws, name) {
     emote: null,
     emoteEndsAt: 0,
 
+    sliding: false,
+    slideEndsAt: 0,
+    slideCooldownUntil: 0,
+
     jumpBuffer: 0,
     coyote: 0,
+
+    kicked: false,
   };
 
   players.set(id, player);
@@ -128,8 +140,13 @@ export function respawn(p) {
   p.emote = null;
   p.emoteEndsAt = 0;
 
-  // streak is preserved across respawn
-  // (it's cleared on death in combat.applyDamage, not here)
+  p.sliding = false;
+  p.slideEndsAt = 0;
+  p.slideCooldownUntil = 0;
+
+  p.height = PLAYER.HEIGHT;
+  p.jumpBuffer = 0;
+  p.coyote = 0;
 }
 
 export function setEmote(p, emoteId, durationMs) {
@@ -145,7 +162,34 @@ export function clearEmote(p) {
   p.emoteEndsAt = 0;
 }
 
+export function giveWeapon(p, weaponId) {
+  const w = getWeapon(weaponId);
+  if (!w) return false;
+  p.weaponId = w.id;
+  p.magAmmo = w.magSize;
+  p.reloading = false;
+  p.reloadEndsAt = 0;
+  p.aiming = false;
+  return true;
+}
+
+export function slap(p, vx, vy, vz) {
+  p.vx += vx;
+  p.vy += vy;
+  p.vz += vz;
+}
+
+export function teleport(p, x, y, z) {
+  p.x = x;
+  p.y = y;
+  p.z = z;
+  p.vx = 0;
+  p.vy = 0;
+  p.vz = 0;
+  p.onGround = false;
+}
+
 function sanitizeName(name) {
   if (typeof name !== 'string') return '';
-  return name.trim().slice(0, 16).replace(/[^\w \-_.]/g, '');
+  return name.trim().slice(0, 20);
 }
