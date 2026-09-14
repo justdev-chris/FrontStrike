@@ -23,7 +23,6 @@ export function tick() {
   for (const p of players.getAll().values()) {
     if (!p.alive) continue;
 
-    // tick counters live on the player so they persist between ticks
     if (p.jumpBuffer === undefined) p.jumpBuffer = 0;
     if (p.coyote === undefined) p.coyote = 0;
 
@@ -44,7 +43,6 @@ export function tick() {
     const dx = mx * speed * DT;
     const dz = mz * speed * DT;
 
-    // jump buffer
     if (p.input.jump) p.jumpBuffer = JUMP_BUFFER_TICKS;
     else p.jumpBuffer = Math.max(0, p.jumpBuffer - 1);
 
@@ -58,11 +56,14 @@ export function tick() {
     p.vy -= PLAYER.GRAVITY * DT;
     const dy = p.vy * DT;
 
+    const wasGrounded = p.onGround;
+
     const next = moveAndCollide(
       { x: p.x, y: p.y, z: p.z, vy: p.vy },
       dx, dy, dz,
       PLAYER.RADIUS, PLAYER.HEIGHT,
-      solids
+      solids,
+      wasGrounded
     );
 
     p.x = next.x;
