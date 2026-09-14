@@ -32,6 +32,10 @@ export function remove(id) {
   avatars.delete(id);
 }
 
+export function getAll() {
+  return avatars;
+}
+
 export function setEmote(playerId, emote, endsAt) {
   const a = avatars.get(playerId);
   if (!a) return;
@@ -78,6 +82,7 @@ export function applySnapshot(players) {
     }
 
     a.aiming = !!p.aiming;
+    a.sliding = !!p.sliding;
 
     a.snapshots.push({
       time: now,
@@ -130,9 +135,12 @@ export function update() {
     a.walkPhase += speed * dt * 2.4;
 
     const pitch = from.pitch + (to.pitch - from.pitch) * t;
+    a.lastPitch = pitch;
 
     if (a.emote) {
       animateEmote(a, now, pitch);
+    } else if (a.sliding) {
+      animateSlide(a, pitch, speed);
     } else {
       animate(a, pitch, speed);
     }
@@ -150,8 +158,6 @@ function animate(a, pitch, speed) {
   a.body.position.y = a.bodyBaseY + bob;
   a.head.position.y = a.headBaseY + bob;
 
-  // head + arms tilt with camera pitch. arms are children of upper,
-  // so they inherit this rotation — do NOT double-apply.
   a.upper.rotation.x = pitch;
   a.arms.rotation.x = 0;
   a.arms.position.y = a.armsBaseY + bob;
@@ -162,6 +168,37 @@ function animate(a, pitch, speed) {
   a.armR.rotation.z = 0;
   a.upper.rotation.z = 0;
   a.group.rotation.z = 0;
+  a.group.rotation.x = 0;
+
+  // standing height offset (relative to group origin)
+  a.body.position.y = a.bodyBaseY;
+  a.legL.position.y = a.legBaseY;
+  a.legR.position.y = a.legBaseY;
+}
+
+function animateSlide(a, pitch, speed) {
+  // crouched, leaning forward, arms tucked
+  a.body.position.y = a.bodyBaseY - 0.35;
+  a.head.position.y = a.headBaseY - 0.35;
+  a.arms.position.y = a.armsBaseY - 0.35;
+
+  a.upper.rotation.x = pitch * 0.4 + 0.35;
+  a.arms.rotation.x = 0;
+
+  a.legL.rotation.x = 1.1;
+  a.legR.rotation.x = 0.6;
+
+  a.armL.rotation.x = -0.6;
+  a.armR.rotation.x = -0.6;
+  a.armL.rotation.z = 0;
+  a.armR.rotation.z = 0;
+
+  a.upper.rotation.z = 0;
+  a.group.rotation.z = 0;
+  a.group.rotation.x = 0;
+
+  a.legL.position.y = a.legBaseY - 0.35;
+  a.legR.position.y = a.legBaseY - 0.35;
 }
 
 function animateEmote(a, now, pitch) {
@@ -175,6 +212,9 @@ function animateEmote(a, now, pitch) {
   a.upper.rotation.x = 0;
   a.upper.rotation.z = 0;
   a.group.rotation.z = 0;
+  a.group.rotation.x = 0;
+  a.legL.position.y = a.legBaseY;
+  a.legR.position.y = a.legBaseY;
 
   switch (a.emote) {
     case 'wave': {
@@ -319,11 +359,14 @@ function create(p) {
     bodyBaseY: 0.9,
     headBaseY: 0.55,
     armsBaseY: 0.35,
+    legBaseY: 0.7,
     deathBaseY: baseY,
     walkPhase: 0,
+    lastPitch: 0,
     alive: p.alive !== false,
     fallStart: p.alive === false ? performance.now() : null,
     aiming: false,
+    sliding: false,
     emote: p.emote || null,
     emoteEndsAt: 0,
     emoteStart: 0,
