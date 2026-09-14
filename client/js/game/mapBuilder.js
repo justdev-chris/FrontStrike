@@ -58,7 +58,6 @@ export function updateHealthPacks(packs) {
 
     mesh.visible = !!hp.active;
     if (hp.active) {
-      // keep the position in sync (shouldn't change, but cheap)
       mesh.position.set(hp.x, hp.y + 0.5, hp.z);
     }
   }
@@ -77,7 +76,6 @@ function addHealthPacks(list) {
 function createHealthPackMesh() {
   const g = new THREE.Group();
 
-  // white cross box
   const bodyMat = new THREE.MeshLambertMaterial({ color: 0xf5f5f5 });
   const crossMat = new THREE.MeshLambertMaterial({ color: 0xe3354a });
 
@@ -100,7 +98,6 @@ function createHealthPackMesh() {
   crossD.position.x = 0.29;
   g.add(crossD);
 
-  // soft glow ring under it
   const glow = new THREE.Mesh(
     new THREE.RingGeometry(0.55, 0.85, 24),
     new THREE.MeshBasicMaterial({
@@ -135,58 +132,142 @@ function addBox(s) {
 }
 
 function addRamp(s) {
-  const geo = new THREE.BufferGeometry();
-  const hw = s.w / 2;
-  const hd = s.d / 2;
-
-  const v = [];
-  v.push(-hw, 0, -hd);
-  v.push( hw, 0, -hd);
-  v.push( hw, 0,  hd);
-  v.push(-hw, 0,  hd);
-
-  const topHeights = cornerHeights(s);
-  v.push(-hw, topHeights[0], -hd);
-  v.push( hw, topHeights[1], -hd);
-  v.push( hw, topHeights[2],  hd);
-  v.push(-hw, topHeights[3],  hd);
-
-  const positions = new Float32Array(v);
-  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-
-  const idx = [
-    0, 2, 1,  0, 3, 2,
-    4, 5, 6,  4, 6, 7,
-    0, 1, 5,  0, 5, 4,
-    1, 2, 6,  1, 6, 5,
-    2, 3, 7,  2, 7, 6,
-    3, 0, 4,  3, 4, 7,
-  ];
-  geo.setIndex(idx);
-  geo.computeVertexNormals();
-
-  const uvs = new Float32Array([
-    0, 0,  1, 0,  1, 1,  0, 1,
-    0, 0,  1, 0,  1, 1,  0, 1,
-  ]);
-  geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-
+  const geo = buildRampGeometry(s);
   const mat = getMaterialTiled(s.mat || 'metal', Math.max(1, s.w / 2), Math.max(1, s.d / 2));
   const mesh = new THREE.Mesh(geo, mat);
   mesh.position.set(s.x, s.y, s.z);
   group.add(mesh);
 
+  // Only outer silhouette edges (12 edges of the wedge), not triangle diagonals
   const edges = new THREE.LineSegments(
-    new THREE.EdgesGeometry(geo),
+    buildRampOutline(s),
     edgeLineFor(s.mat)
   );
   edges.position.set(s.x, s.y, s.z);
   group.add(edges);
 }
 
+function buildRampGeometry(s) {
+  const hw = s.w / 2;
+  const hd = s.d / 2;
+
+  const tops = cornerHeights(s);
+
+  // 8 vertices
+  // bottom (0-3), top (4-7)
+  const positions = new Float32Array([
+    // bottom
+    -hw, 0,       -hd,
+     hw, 0,       -hd,
+     hw, 0,        hd,
+    -hw, 0,        hd,
+    // top
+    -hw, tops[0], -hd,
+     hw, tops[1], -hd,
+     hw, tops[2],  hd,
+    -hw, tops[3],  hd,
+  ]);
+
+  // faces: bottom quad, top quad, 4 sides
+  const indices = [
+    // bottom
+    0, 2, 1,  0, 3, 2,
+    // top
+    4, 5, 6,  4, 6, 7,
+    // sides
+    0, 1, 5,  0, 5, 4,   // -Z
+    1, 2, 6,  1, 6, 5,   // +X
+    2, 3, 7,  2, 7, 6,   // +Z
+    3, 0, 4,  3, 4, 7,   // -X
+  ];
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geo.setIndex(indices);
+
+  // proper UVs per face
+  const uvs = new Float32Array([
+    0, 0,  1, 0,  1, 1,  0, 1,   // bottom
+    0, 0,  1, 0,  1, 1,  0, 1,   // top
+  ]);
+
+  // side faces reuse scaled UVs from their corner coordinates
+  // (approximate; each side is a quad)
+  const sideUVs = new Float32Array([
+    0, 0, 1, 0, 1, 1, 0, 1,
+    0, 0, 1, 0, 1, 1, 0, 1,
+    0, 0, 1, 0, 1, 1, 0, 1,
+    0, 0, 1, 0, 1, 1, 0, 1,
+  ]);
+
+  const fullUVs = new Float32Array([...uvs, ...sideUVs]);
+
+  // We have 8 verts but each face vertex may need its own UV.
+  // Simplest: non-indexed geometry with per-triangle UVs.
+  const nonIndexed = geo.toNonIndexed();
+  geo.dispose();
+
+  const pos = nonIndexed.getAttribute('position');
+  const uvArr = new Float32Array(pos.count * 2);
+
+  for (let i = 0; i < pos.count; i += 3) {
+    const tri = i / 3;
+    if (tri < 2) {
+      // bottom triangle
+      uvArr[i*2]     = 0; uvArr[i*2+1]     = 0;
+      uvArr[(i+1)*2] = 1; uvArr[(i+1)*2+1] = 0;
+      uvArr[(i+2)*2] = 1; uvArr[(i+2)*2+1] = 1;
+    } else if (tri < 4) {
+      // top triangle
+      uvArr[i*2]     = 0; uvArr[i*2+1]     = 0;
+      uvArr[(i+1)*2] = 1; uvArr[(i+1)*2+1] = 0;
+      uvArr[(i+2)*2] = 1; uvArr[(i+2)*2+1] = 1;
+    } else {
+      // side triangles — scaled by aspect
+      uvArr[i*2]     = 0; uvArr[i*2+1]     = 0;
+      uvArr[(i+1)*2] = 1; uvArr[(i+1)*2+1] = 0;
+      uvArr[(i+2)*2] = 1; uvArr[(i+2)*2+1] = 1;
+    }
+  }
+
+  nonIndexed.setAttribute('uv', new THREE.BufferAttribute(uvArr, 2));
+  nonIndexed.computeVertexNormals();
+  return nonIndexed;
+}
+
+function buildRampOutline(s) {
+  const hw = s.w / 2;
+  const hd = s.d / 2;
+  const tops = cornerHeights(s);
+
+  const v = [
+    new THREE.Vector3(-hw, 0,       -hd),
+    new THREE.Vector3( hw, 0,       -hd),
+    new THREE.Vector3( hw, 0,        hd),
+    new THREE.Vector3(-hw, 0,        hd),
+    new THREE.Vector3(-hw, tops[0], -hd),
+    new THREE.Vector3( hw, tops[1], -hd),
+    new THREE.Vector3( hw, tops[2],  hd),
+    new THREE.Vector3(-hw, tops[3],  hd),
+  ];
+
+  const edgePairs = [
+    [0,1],[1,2],[2,3],[3,0],   // bottom
+    [4,5],[5,6],[6,7],[7,4],   // top
+    [0,4],[1,5],[2,6],[3,7],   // verticals
+  ];
+
+  const pts = [];
+  for (const [a, b] of edgePairs) {
+    pts.push(v[a], v[b]);
+  }
+
+  const geo = new THREE.BufferGeometry().setFromPoints(pts);
+  return geo;
+}
+
 function cornerHeights(s) {
   const h = s.h;
-  const zAlong = s.axis === 'z';
   const xAlong = s.axis === 'x';
   const dir = s.dir;
 
