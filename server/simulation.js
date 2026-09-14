@@ -4,8 +4,9 @@ import * as players from './players.js';
 import * as game from './game.js';
 
 const DT = 1 / NET.TICK_RATE;
+const JUMP_BUFFER_TICKS = 3;
+const COYOTE_TICKS = 3;
 
-// Cache expanded solids per mapId so we don't rebuild stairs every tick.
 const expandedCache = new Map();
 
 function getSolids(map) {
@@ -22,7 +23,10 @@ export function tick() {
   for (const p of players.getAll().values()) {
     if (!p.alive) continue;
 
-    // horizontal input
+    // tick counters live on the player so they persist between ticks
+    if (p.jumpBuffer === undefined) p.jumpBuffer = 0;
+    if (p.coyote === undefined) p.coyote = 0;
+
     const speed = PLAYER.MOVE_SPEED * (p.input.sprint ? PLAYER.SPRINT_MULT : 1);
     const sin = Math.sin(p.yaw);
     const cos = Math.cos(p.yaw);
@@ -40,11 +44,17 @@ export function tick() {
     const dx = mx * speed * DT;
     const dz = mz * speed * DT;
 
-    // jump / gravity
-    if (p.input.jump && p.onGround) {
+    // jump buffer
+    if (p.input.jump) p.jumpBuffer = JUMP_BUFFER_TICKS;
+    else p.jumpBuffer = Math.max(0, p.jumpBuffer - 1);
+
+    if (p.jumpBuffer > 0 && (p.onGround || p.coyote > 0)) {
       p.vy = PLAYER.JUMP_VELOCITY;
       p.onGround = false;
+      p.coyote = 0;
+      p.jumpBuffer = 0;
     }
+
     p.vy -= PLAYER.GRAVITY * DT;
     const dy = p.vy * DT;
 
@@ -61,5 +71,8 @@ export function tick() {
     p.vy = next.vy;
     p.onGround = next.onGround;
     if (next.onGround && p.vy < 0) p.vy = 0;
+
+    if (p.onGround) p.coyote = COYOTE_TICKS;
+    else p.coyote = Math.max(0, p.coyote - 1);
   }
 }
