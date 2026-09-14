@@ -1,5 +1,5 @@
 // Weapon definitions. Shared by server (damage, fire rate) and client
-// (viewmodel, zoom, recoil, reload animation timings).
+// (viewmodel, zoom, recoil, reload animation timings, audio).
 
 export const WEAPONS = {
   rifle: {
@@ -12,16 +12,17 @@ export const WEAPONS = {
     magSize: 30,
     reloadMs: 2200,
     auto: true,
-    adsZoom: 65,          // FOV while aiming
+    adsZoom: 65,
     adsTimeMs: 140,
-    recoilPitch: 0.009,   // radians per shot
-    recoilYaw: 0.004,     // ± random
+    recoilPitch: 0.009,
+    recoilYaw: 0.004,
     recoilRecoverMs: 260,
     vignetteStrength: 0.35,
     hasScope: false,
     moveMultAds: 0.65,
     viewmodel: 'rifle',
     range: 200,
+    sound: 'gunshot_rifle',
   },
 
   smg: {
@@ -44,6 +45,7 @@ export const WEAPONS = {
     moveMultAds: 0.75,
     viewmodel: 'smg',
     range: 120,
+    sound: 'gunshot_smg',
   },
 
   sniper: {
@@ -56,7 +58,7 @@ export const WEAPONS = {
     magSize: 5,
     reloadMs: 3200,
     auto: false,
-    adsZoom: 25,          // tight FOV — full scope
+    adsZoom: 25,
     adsTimeMs: 220,
     recoilPitch: 0.055,
     recoilYaw: 0.012,
@@ -66,6 +68,7 @@ export const WEAPONS = {
     moveMultAds: 0.35,
     viewmodel: 'sniper',
     range: 400,
+    sound: 'gunshot_sniper',
   },
 
   pistol: {
@@ -88,6 +91,7 @@ export const WEAPONS = {
     moveMultAds: 0.8,
     viewmodel: 'pistol',
     range: 150,
+    sound: 'gunshot_pistol',
   },
 };
 
