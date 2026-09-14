@@ -1,13 +1,24 @@
 import * as THREE from 'three';
 import { getScene } from '../core/renderer.js';
-
-// Tracers and impact sparks for remote shots.
-// Local shooting is handled in localPlayer.js.
+import { getWeapon } from '/shared/weapons.js';
+import { state } from '../main.js';
+import * as audio from '../core/audio.js';
 
 const tracers = [];
 const sparks = [];
 
 export function onShot(msg) {
+  // play positional gunshot at the shooter's position
+  const shooter = state.players.get(msg.shooter);
+  if (shooter) {
+    const w = getWeapon(msg.weaponId || 'rifle');
+    audio.play(w.sound, {
+      volume: 0.85,
+      pitchVariance: 0.04,
+      position: { x: shooter.x, y: shooter.y, z: shooter.z },
+    });
+  }
+
   if (!msg.point) return;
   drawTracer(msg.origin, msg.point);
   spawnImpact(msg.point);
