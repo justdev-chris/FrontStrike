@@ -22,6 +22,7 @@ export const S2C = {
   MATCH_STATE: 'matchState',
   KILLFEED: 'killfeed',
   EMOTE: 'emote',
+  STREAK: 'streak',
 };
 
 export const EMOTES = {
@@ -36,6 +37,14 @@ export const EMOTE_KEYS = {
   Digit6: 'dance',
   Digit7: 'taunt',
   Digit8: 'point',
+};
+
+// Kill streak thresholds and their display names.
+export const STREAKS = {
+  3: 'KILLING SPREE',
+  5: 'RAMPAGE',
+  7: 'DOMINATING',
+  10: 'UNSTOPPABLE',
 };
 
 export function publicPlayer(p) {
@@ -53,6 +62,7 @@ export function publicPlayer(p) {
     weaponId: p.weaponId,
     aiming: p.aiming,
     emote: p.emote,
+    streak: p.streak || 0,
   };
 }
 
