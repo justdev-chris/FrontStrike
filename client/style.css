@@ -175,8 +175,6 @@ canvas#game {
   animation: fadeIn 0.2s;
 }
 
-/* ---------- Kill streak banner ---------- */
-
 #streakBanner {
   position: absolute;
   left: 50%;
@@ -523,6 +521,161 @@ canvas#game {
   font-variant-numeric: tabular-nums;
   opacity: 0.55;
   letter-spacing: 0.1em;
+}
+
+/* ---------- End screen ---------- */
+
+#endScreen {
+  position: fixed;
+  inset: 0;
+  z-index: 18;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.end-content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  padding: 56px 72px;
+  width: 780px;
+  max-width: 90vw;
+  max-height: 90vh;
+  background: rgba(6, 8, 10, 0.82);
+  backdrop-filter: blur(20px) saturate(0.6);
+  -webkit-backdrop-filter: blur(20px) saturate(0.6);
+  border: 1px solid var(--line);
+  animation: panelEnter 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.end-header { text-align: center; }
+
+.end-kicker {
+  font-size: 10px;
+  letter-spacing: 0.5em;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.end-title {
+  font-size: 52px;
+  font-weight: 200;
+  letter-spacing: 0.28em;
+  color: var(--ink);
+  text-shadow: 0 0 40px rgba(232, 234, 232, 0.2);
+}
+
+.end-title.red  { color: var(--red);  text-shadow: 0 0 48px rgba(227, 51, 85, 0.55); }
+.end-title.blue { color: var(--blue); text-shadow: 0 0 48px rgba(68, 170, 255, 0.55); }
+
+.end-subtitle {
+  font-size: 12px;
+  letter-spacing: 0.3em;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  margin-top: 10px;
+}
+
+.end-leaderboard {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 12px 0;
+}
+
+.lb-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lb-row {
+  display: grid;
+  grid-template-columns: 40px 1fr 90px 50px 50px 70px;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lb-row.header {
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 6px;
+}
+
+.lb-row:not(.header):hover { background: rgba(255, 255, 255, 0.03); }
+
+.lb-row.top {
+  background: rgba(80, 255, 140, 0.06);
+}
+
+.lb-row.self {
+  background: rgba(80, 255, 140, 0.1);
+}
+
+.lb-row.self .lb-name {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.lb-rank {
+  color: var(--ink-faint);
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+}
+
+.lb-row.top .lb-rank { color: var(--accent); font-weight: 700; }
+
+.lb-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lb-team { font-size: 11px; letter-spacing: 0.2em; opacity: 0.7; }
+.lb-team .team-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 6px;
+  vertical-align: middle;
+  box-shadow: 0 0 6px currentColor;
+}
+.lb-team .team-dot.red  { background: var(--red);  color: var(--red); }
+.lb-team .team-dot.blue { background: var(--blue); color: var(--blue); }
+.lb-team .team-dot.ffa  { background: var(--accent); color: var(--accent); }
+
+.lb-k, .lb-d, .lb-kd {
+  text-align: right;
+  font-size: 13px;
+}
+
+.lb-k { color: var(--accent); }
+.lb-d { color: var(--red); }
+.lb-kd { color: var(--ink-dim); }
+
+.end-footer {
+  text-align: center;
+}
+
+.end-hint {
+  font-size: 11px;
+  letter-spacing: 0.4em;
+  color: var(--ink-faint);
+  text-transform: uppercase;
 }
 
 /* =========================================================
