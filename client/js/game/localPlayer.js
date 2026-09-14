@@ -13,6 +13,8 @@ import * as scope from './scope.js';
 const DT = 1 / 60;
 const MAX_HISTORY = 128;
 const RECONCILE_THRESHOLD = 0.05;
+const JUMP_BUFFER_FRAMES = 6;
+const COYOTE_FRAMES = 6;
 
 const local = {
   x: 0, y: 0, z: 0,
@@ -39,6 +41,9 @@ const local = {
 
   emote: null,
   emoteEndsAt: 0,
+
+  jumpBuffer: 0,
+  coyote: 0,
 };
 
 let cachedSolids = null;
@@ -67,6 +72,8 @@ export function spawn(playerData) {
   local.history.length = 0;
   local.alive = true;
   local.dead = false;
+  local.jumpBuffer = 0;
+  local.coyote = 0;
 
   const w = getWeapon(local.weaponId);
   local.magAmmo = w.magSize;
@@ -259,7 +266,6 @@ function shoot(effYaw, effPitch) {
     dir: { x: dir.x, y: dir.y, z: dir.z },
   });
 
-  // local gunshot — non-positional, slightly quieter than world shots
   audio.play(w.sound, {
     volume: 0.7,
     pitchVariance: 0.04,
@@ -289,6 +295,7 @@ function step(inputState, moveMult, effYaw) {
   const frozen = !!local.emote;
   const forward = frozen ? 0 : inputState.forward;
   const right   = frozen ? 0 : inputState.right;
+  const jumpHeld = !frozen && inputState.jump;
 
   const speed = PLAYER.MOVE_SPEED * (inputState.sprint ? PLAYER.SPRINT_MULT : 1) * moveMult;
   const sin = Math.sin(effYaw);
@@ -307,10 +314,18 @@ function step(inputState, moveMult, effYaw) {
   const dx = mx * speed * DT;
   const dz = mz * speed * DT;
 
-  if (!frozen && inputState.jump && local.onGround) {
+  // jump buffer: remember the input for a few frames
+  if (jumpHeld) local.jumpBuffer = JUMP_BUFFER_FRAMES;
+  else local.jumpBuffer = Math.max(0, local.jumpBuffer - 1);
+
+  // jump fires if we have buffered input AND (on ground OR coyote time active)
+  if (local.jumpBuffer > 0 && (local.onGround || local.coyote > 0)) {
     local.vy = PLAYER.JUMP_VELOCITY;
     local.onGround = false;
+    local.coyote = 0;
+    local.jumpBuffer = 0;
   }
+
   local.vy -= PLAYER.GRAVITY * DT;
   const dy = local.vy * DT;
 
@@ -327,6 +342,10 @@ function step(inputState, moveMult, effYaw) {
   local.vy = next.vy;
   local.onGround = next.onGround;
   if (next.onGround && local.vy < 0) local.vy = 0;
+
+  // coyote time: keep it alive for a few frames after leaving ground
+  if (local.onGround) local.coyote = COYOTE_FRAMES;
+  else local.coyote = Math.max(0, local.coyote - 1);
 }
 
 function syncCamera(effPitch, effYaw) {
@@ -430,6 +449,8 @@ export function onDeath() {
   local.aiming = false;
   local.emote = null;
   local.emoteEndsAt = 0;
+  local.jumpBuffer = 0;
+  local.coyote = 0;
 }
 
 export function onRespawn(playerData) {
