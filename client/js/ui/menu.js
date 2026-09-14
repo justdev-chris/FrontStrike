@@ -151,8 +151,10 @@ export function updateStatus(info) {
         const li = document.createElement('li');
         const teamClass = p.team === 'red' ? 'red' : p.team === 'blue' ? 'blue' : 'ffa';
         li.innerHTML =
-          `<span><span class="team-dot ${teamClass}"></span>${p.name}</span>` +
-          `<span>${p.kills ?? 0} / ${p.deaths ?? 0}</span>`;
+          `<span class="roster-name">` +
+            `<span class="team-dot ${teamClass}"></span>${escapeHtml(p.name)}` +
+          `</span>` +
+          `<span class="roster-kd">${p.kills ?? 0} / ${p.deaths ?? 0}</span>`;
         els.menuPlayers.appendChild(li);
       }
     }
@@ -223,7 +225,14 @@ function updateVoteCounts(state) {
     const id = btn.dataset.mapId;
     const count = mapCounts[id] || 0;
     const name = maps.find(m => m.id === id)?.name || id;
-    btn.innerHTML = `${name}<span class="count">${count}</span>`;
+    btn.innerHTML = `${escapeHtml(name)}<span class="count">${count}</span>`;
     btn.classList.toggle('voted', id === myVoteMap);
   }
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
