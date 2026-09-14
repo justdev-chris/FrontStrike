@@ -8,6 +8,7 @@ let respawnTimerId = null;
 let scoreboardVisible = false;
 let emoteTimeout = null;
 let streakTimeout = null;
+let announceTimeout = null;
 
 let displayRedScore = 0;
 let displayBlueScore = 0;
@@ -41,6 +42,11 @@ export function init() {
     tabBlueScore:  document.getElementById('tabBlueScore'),
     emoteIndicator: document.getElementById('emoteIndicator'),
     streakBanner:  document.getElementById('streakBanner'),
+    regenIndicator: document.getElementById('regenIndicator'),
+
+    announcement:   document.getElementById('announcement'),
+    announcementText: document.getElementById('announcementText'),
+    announcementFrom: document.getElementById('announcementFrom'),
 
     endScreen:     document.getElementById('endScreen'),
     endTitle:      document.getElementById('endTitle'),
@@ -53,7 +59,7 @@ export function show() { els.hud.classList.remove('hidden'); }
 export function hide() { els.hud.classList.add('hidden'); }
 
 export function update(state) {
-  els.healthValue.textContent = state.health;
+  els.healthValue.textContent = Math.ceil(state.health);
   els.healthValue.classList.toggle('low', state.health <= 25);
 
   if (state.mode === 'tdm') {
@@ -88,6 +94,12 @@ export function update(state) {
     if (els.reloadBar) {
       els.reloadBar.classList.toggle('active', !!state.reloading);
     }
+  }
+
+  // passive regen indicator
+  if (els.regenIndicator) {
+    const showRegen = state.alive && state.health < 100 && state.regenerating;
+    els.regenIndicator.classList.toggle('hidden', !showRegen);
   }
 
   if (scoreboardVisible) updateScoreboard(state);
@@ -184,6 +196,20 @@ export function showStreak(playerName, label) {
   }, 2500);
 }
 
+export function showAnnouncement(text, from) {
+  if (!els.announcement) return;
+  els.announcementText.textContent = text;
+  els.announcementFrom.textContent = from ? `— ${from}` : '';
+  els.announcement.classList.remove('hidden');
+  els.announcement.style.animation = 'none';
+  void els.announcement.offsetWidth;
+  els.announcement.style.animation = '';
+  clearTimeout(announceTimeout);
+  announceTimeout = setTimeout(() => {
+    els.announcement.classList.add('hidden');
+  }, 5000);
+}
+
 export function showDeath(killerName, respawnMs) {
   if (!els.deathOverlay) return;
   els.deathOverlay.classList.remove('hidden');
@@ -240,9 +266,8 @@ export function hideEmote() {
 export function showEndScreen(state) {
   if (!els.endScreen) return;
 
-  const { winner, mode, players, myId, endReason } = state;
+  const { winner, players, myId, endReason } = state;
 
-  // title + subtitle
   let title = 'MATCH OVER';
   let subtitle = endReason === 'limit' ? 'Kill limit reached' : 'Time expired';
 
@@ -266,7 +291,6 @@ export function showEndScreen(state) {
 
   els.endSubtitle.textContent = subtitle;
 
-  // leaderboard — sorted by kills, then fewer deaths
   const list = [...players.values()];
   list.sort((a, b) => {
     if (b.kills !== a.kills) return b.kills - a.kills;
@@ -275,7 +299,6 @@ export function showEndScreen(state) {
 
   els.endLeaderboard.innerHTML = '';
 
-  // header row
   const header = document.createElement('div');
   header.className = 'lb-row header';
   header.innerHTML =
