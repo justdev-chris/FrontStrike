@@ -1,5 +1,5 @@
 import { C2S, S2C, EMOTES, publicPlayer, publicMap } from '../shared/protocol.js';
-import { NET } from '../shared/constants.js';
+import { NET, MATCH } from '../shared/constants.js';
 import { MAPS } from '../shared/map.js';
 import { getWeapon } from '../shared/weapons.js';
 import * as players from './players.js';
@@ -127,7 +127,8 @@ function onShoot(p, msg) {
       health: victim.health,
       attacker: p.id,
     });
-    if (!victim.alive) {
+
+    if (result.killed) {
       broadcast({ type: S2C.DEATH, victim: victim.id, killer: p.id });
       broadcast({
         type: S2C.KILLFEED,
@@ -135,14 +136,26 @@ function onShoot(p, msg) {
         victim: victim.id,
         weapon: p.weaponId,
       });
+
+      if (result.streak) {
+        broadcast({
+          type: S2C.STREAK,
+          playerId: p.id,
+          playerName: p.name,
+          count: p.streak,
+          label: result.streak,
+        });
+      }
+
+      if (result.hitLimit) {
+        game.endMatch('limit');
+        broadcastMatchState();
+      }
     }
   }
 }
 
 function onEmote(p, msg) {
-  console.log('onEmote from', p.id, ':', msg.emote, 'alive=', p.alive, 'reloading=', p.reloading);
-
-  // null emote means "cancel"
   if (msg.emote === null) {
     players.clearEmote(p);
     broadcast({
@@ -192,6 +205,7 @@ export function startLoop() {
 
   setInterval(() => {
     const now = Date.now();
+    const s = game.getState();
 
     for (const p of players.getAll().values()) {
       if (!p.alive && p.respawnAt && now >= p.respawnAt) {
@@ -215,6 +229,12 @@ export function startLoop() {
           endsAt: 0,
         });
       }
+    }
+
+    // time-limit end
+    if (s.phase === 'playing' && now >= s.matchEndTime) {
+      game.endMatch('time');
+      broadcastMatchState();
     }
 
     if (now - lastSnapshot >= SNAPSHOT_MS) {
@@ -249,6 +269,23 @@ function broadcastVoteState() {
     matchEndTime: s.matchEndTime,
     modeVotes: s.modeVotes,
     mapVotes: s.mapVotes,
+  });
+}
+
+// exported so server.js can reuse it when ending by kill limit
+export function broadcastMatchState() {
+  const s = game.getState();
+  broadcast({
+    type: S2C.MATCH_STATE,
+    phase: s.phase,
+    mode: s.mode,
+    mapId: s.mapId,
+    scores: s.scores,
+    matchEndTime: s.matchEndTime,
+    modeVotes: s.modeVotes,
+    mapVotes: s.mapVotes,
+    endReason: s.endReason,
+    winner: s.winner,
   });
 }
 
