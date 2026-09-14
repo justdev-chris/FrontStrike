@@ -1,4 +1,5 @@
 import { PLAYER } from '../shared/constants.js';
+import { STREAKS } from '../shared/protocol.js';
 import { getWeapon } from '../shared/weapons.js';
 import { raycastSolids, expandStairs } from '../shared/collision.js';
 import * as players from './players.js';
@@ -13,19 +14,15 @@ function getSolids(map) {
   return solids;
 }
 
+// Returned so network.js can broadcast streak announcements.
 export function handleShoot(shooter, dir, requestedWeaponId) {
   const now = Date.now();
   if (!shooter.alive) return null;
 
   const w = getWeapon(shooter.weaponId);
 
-  // fire rate gate
   if (now - shooter.lastShotAt < w.fireRateMs) return null;
-
-  // reload gate
   if (shooter.reloading) return null;
-
-  // ammo gate
   if (shooter.magAmmo <= 0) return null;
 
   shooter.lastShotAt = now;
@@ -45,12 +42,15 @@ export function handleShoot(shooter, dir, requestedWeaponId) {
 
   if (playerHit) {
     const { victim, t, point, damage } = playerHit;
-    applyDamage(shooter, victim, damage);
+    const killResult = applyDamage(shooter, victim, damage);
     return {
       origin, dir: d,
       hit: victim.id,
       point, t,
       damage,
+      killed: killResult.killed,
+      streak: killResult.streak,
+      hitLimit: killResult.hitLimit,
     };
   }
 
@@ -60,6 +60,9 @@ export function handleShoot(shooter, dir, requestedWeaponId) {
     point: worldHit ? worldHit.point : null,
     t: worldT,
     damage: 0,
+    killed: false,
+    streak: null,
+    hitLimit: false,
   };
 }
 
@@ -126,14 +129,27 @@ function rayAABB(o, d, box) {
 
 function applyDamage(attacker, victim, dmg) {
   victim.health -= dmg;
-  if (victim.health <= 0) {
-    victim.health = 0;
-    victim.alive = false;
-    victim.deaths++;
-    attacker.kills++;
-    game.addKill(attacker.team);
-    victim.respawnAt = Date.now() + PLAYER.RESPAWN_MS;
-    victim.reloading = false;
-    victim.aiming = false;
+
+  if (victim.health > 0) {
+    return { killed: false, streak: null, hitLimit: false };
   }
+
+  // killed
+  victim.health = 0;
+  victim.alive = false;
+  victim.deaths++;
+  victim.streak = 0;              // streak dies with you
+  attacker.kills++;
+  attacker.streak = (attacker.streak || 0) + 1;
+
+  game.addKill(attacker.team);
+
+  victim.respawnAt = Date.now() + PLAYER.RESPAWN_MS;
+  victim.reloading = false;
+  victim.aiming = false;
+
+  const streakName = STREAKS[attacker.streak] || null;
+  const hitLimit = game.checkKillLimit(attacker);
+
+  return { killed: true, streak: streakName, hitLimit };
 }
