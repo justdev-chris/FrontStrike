@@ -12,6 +12,7 @@ const state = {
   adsPos:    new THREE.Vector3(0.00, -0.10, -0.40),
   reloadPos: new THREE.Vector3(0.28, -0.55, -0.55),
   emotePos:  new THREE.Vector3(0.28, -0.65, -0.55),
+  slidePos:  new THREE.Vector3(0.35, -0.35, -0.60),
 
   bobPhase: 0,
   bobAmp: 0,
@@ -21,10 +22,12 @@ const state = {
   adsT: 0,
   reloadT: 0,
   emoteT: 0,
+  slideT: 0,
 
   reloading: false,
   aiming: false,
   emoting: false,
+  sliding: false,
 };
 
 let clock = null;
@@ -71,6 +74,14 @@ function buildViewmodel(weaponId) {
     parts.mag.position.set(0, -0.18, 0.06);
     parts.stock = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.07, 0.1), dark);
     parts.stock.position.set(0, -0.01, 0.3);
+  } else if (weaponId === 'shotgun') {
+    parts.body = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.9), dark);
+    parts.barrel = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.6), mid);
+    parts.barrel.position.set(0, 0.03, -0.55);
+    parts.pump = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 0.2), wood);
+    parts.pump.position.set(0, -0.06, -0.5);
+    parts.stock = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.11, 0.28), wood);
+    parts.stock.position.set(0, -0.02, 0.55);
   } else if (weaponId === 'sniper') {
     parts.body = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 1.1), dark);
     parts.barrel = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.045, 0.5), mid);
@@ -88,12 +99,20 @@ function buildViewmodel(weaponId) {
     parts.grip = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.18, 0.08), dark);
     parts.grip.position.set(0, -0.13, 0.08);
     parts.grip.rotation.x = -0.2;
+  } else if (weaponId === 'rpg') {
+    parts.body = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 1.1, 12), dark);
+    parts.body.rotation.x = Math.PI / 2;
+    parts.tip = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.3, 12), mid);
+    parts.tip.rotation.x = -Math.PI / 2;
+    parts.tip.position.z = -0.7;
+    parts.grip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.2, 0.08), dark);
+    parts.grip.position.set(0, -0.15, 0.15);
   }
 
   for (const key of Object.keys(parts)) group.add(parts[key]);
 
-  state.muzzle = new THREE.PointLight(0xffaa33, 0, 6);
-  state.muzzle.position.set(0, 0, -0.9);
+  state.muzzle = new THREE.PointLight(0xffaa33, 0, 8);
+  state.muzzle.position.set(0, 0, -1.1);
   group.add(state.muzzle);
 
   group.position.copy(state.hipPos);
@@ -135,6 +154,10 @@ export function setEmote(emoteId) {
   state.emoting = !!emoteId;
 }
 
+export function setSliding(sliding) {
+  state.sliding = !!sliding;
+}
+
 export function triggerRecoil() {
   const w = getWeapon(state.weaponId);
   if (!w) return;
@@ -156,42 +179,35 @@ export function update(inputState) {
 
   const dt = clock.getDelta();
 
-  // ---- ADS ----
-  const adsTarget = state.aiming && !state.emoting ? 1 : 0;
+  const adsTarget = state.aiming && !state.emoting && !state.sliding ? 1 : 0;
   const adsRate = 1000 / Math.max(60, w.adsTimeMs);
   state.adsT = approach(state.adsT, adsTarget, adsRate * dt);
 
-  // ---- reload dip ----
   const reloadTarget = state.reloading ? 1 : 0;
   state.reloadT = approach(state.reloadT, reloadTarget, 4 * dt);
 
-  // ---- emote lower ----
   const emoteTarget = state.emoting ? 1 : 0;
   state.emoteT = approach(state.emoteT, emoteTarget, 5 * dt);
 
-  // ---- bob ----
+  const slideTarget = state.sliding ? 1 : 0;
+  state.slideT = approach(state.slideT, slideTarget, 6 * dt);
+
   const moving = inputState && (inputState.forward !== 0 || inputState.right !== 0);
-  const speedFactor = moving && !state.emoting ? 1 : 0;
+  const speedFactor = moving && !state.emoting && !state.sliding ? 1 : 0;
   state.bobAmp = approach(state.bobAmp, speedFactor, 4 * dt);
   state.bobPhase += dt * 8;
 
-  // ---- recoil recovery ----
   const recover = dt / Math.max(0.05, w.recoilRecoverMs / 1000);
   state.recoilOffsetZ = approach(state.recoilOffsetZ, 0, recover * 0.4);
   state.recoilOffsetY = approach(state.recoilOffsetY, 0, recover * 0.4);
   state.recoilRot     = approach(state.recoilRot,     0, recover * 0.4);
 
-  // ---- position ----
   const basePos = new THREE.Vector3().lerpVectors(state.hipPos, state.adsPos, state.adsT);
-
-  // reload dip
   basePos.lerp(state.reloadPos, state.reloadT);
-
-  // emote lower
   basePos.lerp(state.emotePos, state.emoteT);
+  basePos.lerp(state.slidePos, state.slideT);
 
-  // bob (damped by ADS and emote)
-  const bobScale = (1 - 0.7 * state.adsT) * (1 - state.emoteT);
+  const bobScale = (1 - 0.7 * state.adsT) * (1 - state.emoteT) * (1 - state.slideT);
   const bobX = Math.sin(state.bobPhase) * 0.012 * state.bobAmp * bobScale;
   const bobY = Math.abs(Math.cos(state.bobPhase * 2)) * 0.009 * state.bobAmp * bobScale;
 
@@ -200,10 +216,15 @@ export function update(inputState) {
 
   state.group.position.set(basePos.x + bobX, basePos.y + bobY, basePos.z);
 
-  // ---- rotation ----
-  // recoil pitches gun up; reload tilts down; emote also tilts down
-  state.group.rotation.x = state.recoilRot + state.reloadT * 0.8 + state.emoteT * 1.0;
-  state.group.rotation.z = state.reloadT * 0.3 + state.emoteT * 0.15;
+  state.group.rotation.x =
+    state.recoilRot +
+    state.reloadT * 0.8 +
+    state.emoteT * 1.0 +
+    state.slideT * 0.4;
+  state.group.rotation.z =
+    state.reloadT * 0.3 +
+    state.emoteT * 0.15 +
+    state.slideT * 0.2;
 }
 
 function approach(current, target, rate) {
