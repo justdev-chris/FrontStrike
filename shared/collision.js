@@ -1,5 +1,5 @@
-// shared collision solver used by both server and client
-// solid types:
+// Shared collision solver used by both server and client.
+// Solid types:
 //   box    { type:'box',    x, y, z, w, h, d }
 //   ramp   { type:'ramp',   x, y, z, w, h, d, axis:'x'|'z', dir:1|-1 }
 //          - y is the LOWEST corner of the ramp
@@ -10,13 +10,10 @@
 //          - the ramp's footprint is w x d, centered at (x, z)
 //   stairs { type:'stairs', x, y, z, w, h, d, axis:'x'|'z', dir:1|-1, steps:N }
 //          - expanded into N stacked boxes at load time by expandStairs()
-// boxes use center coords. ramps/stais use footprint-center + y as low edge
 
 export const STEP_UP = 0.35;
-export const GRAVITY_SNAP = 0.5;   // how far below feet we look to stay grounded
+export const GRAVITY_SNAP = 0.5;
 
-// expand any 'stairs' solids into a list of boxes. Returns a new array.
-// called once per map at load; caches the result on the map object.
 export function expandStairs(solids) {
   const out = [];
   for (const s of solids) {
@@ -25,9 +22,7 @@ export function expandStairs(solids) {
       const stepH = s.h / n;
       const stepRun = (s.axis === 'x' ? s.w : s.d) / n;
       for (let i = 0; i < n; i++) {
-        const t = i / n;
         const yCenter = s.y + stepH * (i + 0.5);
-        // position along the slope axis
         let off = -((s.axis === 'x' ? s.w : s.d) / 2) + stepRun * (i + 0.5);
         if (s.dir < 0) off = -off;
         const cx = s.axis === 'x' ? s.x + off : s.x;
@@ -48,14 +43,12 @@ export function expandStairs(solids) {
   return out;
 }
 
-// height of the ground under a point, given a list of expanded solids.
-// returns the highest surface <= feetY + tolerance. -Infinity if none.
 export function groundHeightAt(x, z, feetY, solids) {
   let best = -Infinity;
 
   for (const s of solids) {
     if (s.type === 'ramp') {
-      if (!insideRampFootprint(x, z, s)) continue;
+      if (!insideFootprint(x, z, s)) continue;
       const surfaceY = rampHeightAt(x, z, s);
       if (surfaceY <= feetY + STEP_UP && surfaceY > best) best = surfaceY;
     } else if (s.type === 'box') {
@@ -68,21 +61,19 @@ export function groundHeightAt(x, z, feetY, solids) {
   return best;
 }
 
-// move a capsule (radius r, height h, centered at y = centerY) by delta,
-// resolving collisions against all solids. Returns the new state
-// { x, y, z, vy, onGround }.
-export function moveAndCollide(state, dx, dy, dz, radius, height, solids) {
+// Move a capsule (radius r, height h, centered at y = centerY) by delta,
+// resolving collisions against all solids. `wasGrounded` should be the
+// value of onGround from the previous tick — it enables snap-down to the
+// ground only when the player is actually walking, not while airborne.
+export function moveAndCollide(state, dx, dy, dz, radius, height, solids, wasGrounded = false) {
   let { x, y, z, vy } = state;
 
-  // ---- horizontal: try to move, step up if blocked ----
   const nx = x + dx;
   const nz = z + dz;
 
-  // resolve on X then Z separately so we slide along walls
   if (!collides(nx, y, z, radius, height, solids)) {
     x = nx;
   } else {
-    // try step-up on X
     const stepY = tryStepUp(nx, y, z, radius, height, solids);
     if (stepY !== null) { x = nx; y = stepY; }
   }
@@ -94,29 +85,26 @@ export function moveAndCollide(state, dx, dy, dz, radius, height, solids) {
     if (stepY !== null) { z = nz; y = stepY; }
   }
 
-  // ---- vertical ----
   y += dy;
-  vy = dy < 0 ? vy : vy; // caller controls vy externally
 
   let onGround = false;
 
   const feet = y - height / 2;
   const head = y + height / 2;
 
-  // ground check: find highest surface under us at or below feet
   const groundY = groundHeightAt(x, z, feet, solids);
   if (groundY !== -Infinity) {
     if (feet <= groundY) {
       y = groundY + height / 2;
       onGround = true;
-    } else if (feet - groundY < GRAVITY_SNAP && dy <= 0) {
-      // small snap-down so we don't float on stairs
+    } else if (wasGrounded && feet - groundY < GRAVITY_SNAP && dy <= 0) {
+      // snap-down only when the player was already grounded on the previous
+      // tick. Free-falling must never be snapped mid-air.
       y = groundY + height / 2;
       onGround = true;
     }
   }
 
-  // ceiling check
   for (const s of solids) {
     if (s.type !== 'box') continue;
     if (!insideFootprint(x, z, s)) continue;
@@ -127,7 +115,6 @@ export function moveAndCollide(state, dx, dy, dz, radius, height, solids) {
     }
   }
 
-  // floor of the world
   const halfH = height / 2;
   if (y < halfH) {
     y = halfH;
@@ -137,21 +124,18 @@ export function moveAndCollide(state, dx, dy, dz, radius, height, solids) {
   return { x, y, z, vy, onGround };
 }
 
-// do we overlap any solid at this position?
 function collides(x, y, z, radius, height, solids) {
   const feet = y - height / 2;
   const head = y + height / 2;
 
   for (const s of solids) {
     if (s.type === 'ramp') {
-      if (!insideRampFootprint(x, z, s)) continue;
+      if (!insideFootprint(x, z, s)) continue;
       const surfaceY = rampHeightAt(x, z, s);
-      // ramp acts as ground; it doesn't block from the side beyond feet level
       if (feet < surfaceY && feet + height > surfaceY) return true;
       continue;
     }
 
-    // box
     if (x + radius <= s.x - s.w / 2) continue;
     if (x - radius >= s.x + s.w / 2) continue;
     if (z + radius <= s.z - s.d / 2) continue;
@@ -163,17 +147,13 @@ function collides(x, y, z, radius, height, solids) {
   return false;
 }
 
-// if we're blocked but there's a surface just above our feet we can stand on,
-// return the new center-Y. Otherwise null.
 function tryStepUp(x, y, z, radius, height, solids) {
   const feet = y - height / 2;
   const targetFeet = feet + STEP_UP;
   const targetCenterY = targetFeet + height / 2;
 
-  // must not be blocked at the raised position
   if (collides(x, targetCenterY, z, radius, height, solids)) return null;
 
-  // must have ground at the raised position
   const groundY = groundHeightAt(x, z, targetFeet, solids);
   if (groundY === -Infinity) return null;
   if (groundY > targetFeet) return null;
@@ -188,25 +168,18 @@ function insideFootprint(x, z, s) {
   );
 }
 
-function insideRampFootprint(x, z, s) {
-  return insideFootprint(x, z, s);
-}
-
-// height (Y of the walking surface) at a point on a ramp.
 function rampHeightAt(x, z, s) {
   const axisLen = s.axis === 'x' ? s.w : s.d;
   const along = s.axis === 'x'
-    ? (x - (s.x - s.w / 2))    // 0 .. w
-    : (z - (s.z - s.d / 2));   // 0 .. d
+    ? (x - (s.x - s.w / 2))
+    : (z - (s.z - s.d / 2));
 
-  let t = along / axisLen;     // 0 .. 1
+  let t = along / axisLen;
   if (s.dir < 0) t = 1 - t;
 
   return s.y + s.h * t;
 }
 
-// ray vs all solids. Returns { t, point, solid } for the nearest hit,
-// or null if nothing within maxT.
 export function raycastSolids(origin, dir, maxT, solids) {
   let bestT = maxT;
   let bestSolid = null;
@@ -264,10 +237,7 @@ function rayBox(o, d, s) {
   return tmin;
 }
 
-// ray vs ramp: approximate by clipping to the ramp's bounding box and
-// then checking that the hit point satisfies the plane equation.
 function rayRamp(o, d, s) {
-  // bounding box of the ramp (footprint + vertical extent)
   const bbox = {
     x: s.x, z: s.z,
     y: s.y + s.h / 2,
@@ -281,13 +251,11 @@ function rayRamp(o, d, s) {
   const pz = o.z + d.z * tBox;
 
   const surfaceY = rampHeightAt(px, pz, s);
-  // tolerance so a ray grazing the slope still registers
   const tol = 0.15;
   if (py < surfaceY - tol || py > surfaceY + tol) return null;
   return tBox;
 }
 
-// Convenience: center-Y of a capsule standing on ground g.
 export function centerFromFeet(feetY, height) {
   return feetY + height / 2;
 }
