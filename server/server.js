@@ -42,7 +42,7 @@ setInterval(() => {
         game.resetVotes();
         game.setPhase('vote');
         phaseTimer = now + MATCH.VOTE_DURATION_MS;
-        broadcastMatchState();
+        network.broadcastMatchState();
       }
       break;
     }
@@ -68,16 +68,17 @@ setInterval(() => {
           });
         }
 
-        broadcastMatchState();
+        network.broadcastMatchState();
       }
       break;
     }
 
     case 'playing': {
-      if (now >= s.matchEndTime || playerCount === 0) {
-        game.endMatch();
+      // time-based end handled in network.startLoop
+      if (playerCount === 0) {
+        game.endMatch('time');
         phaseTimer = now + MATCH.POST_MATCH_MS;
-        broadcastMatchState();
+        network.broadcastMatchState();
       }
       break;
     }
@@ -85,7 +86,7 @@ setInterval(() => {
     case 'ended': {
       if (now >= phaseTimer) {
         game.setPhase('lobby');
-        broadcastMatchState();
+        network.broadcastMatchState();
       }
       break;
     }
@@ -112,20 +113,6 @@ function respawnAll() {
       player: publicPlayer(p),
     });
   }
-}
-
-function broadcastMatchState() {
-  const s = game.getState();
-  network.broadcast({
-    type: S2C.MATCH_STATE,
-    phase: s.phase,
-    mode: s.mode,
-    mapId: s.mapId,
-    scores: s.scores,
-    matchEndTime: s.matchEndTime,
-    modeVotes: s.modeVotes,
-    mapVotes: s.mapVotes,
-  });
 }
 
 server.listen(PORT, () => {
