@@ -1,6 +1,7 @@
 // Procedural-free audio system. Loads audio files once, plays them with
 // unlimited overlapping voices, pitch variation, and optional 3D panning.
 
+import * as THREE from 'three'; // DONT FORGET THIS CHRISSSS meow 
 import { getCamera } from './renderer.js';
 
 let ctx = null;
