@@ -41,6 +41,8 @@ export const state = {
 
   winner: null,
   endReason: null,
+
+  healthPacks: [],
 };
 
 let suppressPause = false;
@@ -138,8 +140,10 @@ export function onMessage(msg) {
       state.map = msg.map;
       state.players.clear();
       for (const p of msg.players) state.players.set(p.id, p);
+      state.healthPacks = msg.healthPacks || [];
 
       mapBuilder.build(state.map);
+      mapBuilder.updateHealthPacks(state.healthPacks);
       localPlayer.spawn(msg.players.find(p => p.id === state.myId));
       remotePlayers.sync(msg.players);
 
@@ -152,6 +156,7 @@ export function onMessage(msg) {
     case 'mapChange': {
       state.mapId = msg.mapId;
       state.map = msg.map;
+      state.healthPacks = [];
       mapBuilder.build(state.map);
       pushMenuStatus();
       break;
@@ -173,12 +178,33 @@ export function onMessage(msg) {
       state.players.clear();
       for (const p of msg.players) state.players.set(p.id, p);
 
+      if (msg.healthPacks) {
+        state.healthPacks = msg.healthPacks;
+        mapBuilder.updateHealthPacks(msg.healthPacks);
+      }
+
       const me = msg.players.find(p => p.id === state.myId);
       const ackedSeq = me ? me.ackedSeq : undefined;
 
       remotePlayers.applySnapshot(msg.players);
       localPlayer.applySnapshot(msg.players, ackedSeq);
       hud.update(state);
+      break;
+    }
+
+    case 'healthPack': {
+      // single-pack update
+      const pack = msg.pack;
+      if (pack) {
+        const idx = state.healthPacks.findIndex(hp => hp.id === pack.id);
+        if (idx >= 0) state.healthPacks[idx] = pack;
+        else state.healthPacks.push(pack);
+        mapBuilder.updateHealthPacks(state.healthPacks);
+
+        if (pack.active === false && state.healthPacks.length) {
+          // optional: play a small "consumed" sound if you're close
+        }
+      }
       break;
     }
 
@@ -276,12 +302,13 @@ function handleMatchState(msg) {
   if (prevPhase === 'vote' && msg.phase === 'playing') {
     menu.hide();
     menu.hidePaused();
+    hud.hideEndScreen();
     requestLock();
   }
 
   if (msg.phase === 'ended' && prevPhase === 'playing') {
-    // future: end-of-match screen hook here
     input.unlock();
+    hud.showEndScreen(state);
   }
 
   if (msg.phase !== 'playing' && msg.phase !== 'vote' && msg.phase !== 'ended') {
