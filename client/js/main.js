@@ -1,6 +1,7 @@
 import * as net from './core/net.js';
 import * as input from './core/input.js';
 import * as renderer from './core/renderer.js';
+import * as audio from './core/audio.js';
 
 import * as mapBuilder from './game/mapBuilder.js';
 import * as localPlayer from './game/localPlayer.js';
@@ -49,9 +50,14 @@ async function boot() {
   hud.init();
   weaponView.init();
   scope.init();
+  audio.init();
 
   menu.init({
     onPlay: async (name) => {
+      // user gesture: unlock audio and load buffers
+      audio.resume();
+      audio.loadAll();
+
       await net.connect(name);
       state.joined = true;
       menu.hide();
@@ -179,8 +185,14 @@ export function onMessage(msg) {
       break;
 
     case 'damage':
-      if (msg.victim === state.myId) hud.flashDamage();
-      if (msg.attacker === state.myId) hud.showHitmarker();
+      if (msg.victim === state.myId) {
+        hud.flashDamage();
+        audio.play('hurt', { volume: 0.9 });
+      }
+      if (msg.attacker === state.myId) {
+        hud.showHitmarker();
+        audio.play('hitmarker', { volume: 0.7 });
+      }
       hud.update(state);
       break;
 
@@ -189,10 +201,12 @@ export function onMessage(msg) {
         localPlayer.onDeath();
         const killer = state.players.get(msg.killer);
         hud.showDeath(killer ? killer.name : null, PLAYER.RESPAWN_MS);
+        audio.play(Math.random() < 0.5 ? 'death1' : 'death2', { volume: 0.9 });
       }
       if (msg.killer === state.myId) {
         const victim = state.players.get(msg.victim);
         hud.showKill(victim ? victim.name : 'player');
+        audio.play('killconfirm', { volume: 0.85 });
       }
       break;
     }
@@ -212,7 +226,6 @@ export function onMessage(msg) {
 
     case 'emote': {
       if (msg.playerId === state.myId) {
-        // local player's own emote
         if (msg.emote) {
           state.emote = msg.emote;
           state.emoteEndsAt = msg.endsAt;
@@ -281,6 +294,9 @@ function frame(now) {
   localPlayer.update(inputState, now);
   remotePlayers.update(now);
   weapons.update(now);
+
+  // keep Web Audio listener aligned with the camera
+  audio.updateListener();
 
   state.timeLeft = computeTimeLeft();
 
