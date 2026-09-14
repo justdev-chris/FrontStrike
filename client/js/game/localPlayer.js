@@ -329,11 +329,14 @@ function step(inputState, moveMult, effYaw) {
   local.vy -= PLAYER.GRAVITY * DT;
   const dy = local.vy * DT;
 
+  const wasGrounded = local.onGround;
+
   const next = moveAndCollide(
     { x: local.x, y: local.y, z: local.z, vy: local.vy },
     dx, dy, dz,
     PLAYER.RADIUS, PLAYER.HEIGHT,
-    getSolids()
+    getSolids(),
+    wasGrounded
   );
 
   local.x = next.x;
