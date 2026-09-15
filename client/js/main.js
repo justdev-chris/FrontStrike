@@ -94,6 +94,7 @@ async function boot() {
     if (!state.joined) return;
     if (input.isLocked()) return;
     if (suppressPause) return;
+    if (admin.isOpen()) return;
     if (state.phase === 'vote') return;
     if (state.phase === 'lobby' && !state.mapId) return;
     menu.showPaused();
@@ -104,6 +105,7 @@ async function boot() {
     if (!state.joined) return;
     if (state.phase !== 'playing') return;
     if (input.isLocked()) return;
+    if (admin.isOpen()) return;
     menu.showPaused();
   });
 
@@ -112,6 +114,7 @@ async function boot() {
       if (!state.joined) return;
       if (state.phase !== 'playing') return;
       if (menu.isPaused()) return;
+      if (admin.isOpen()) return;   // don't pause while admin panel is up
       menu.showPaused();
       input.unlock();
     }
@@ -124,11 +127,20 @@ async function boot() {
   window.addEventListener('fs-lock-failed', () => {
     if (!state.joined) return;
     if (state.phase !== 'playing') return;
+    if (admin.isOpen()) return;
     menu.showPaused();
   });
 
-  window.addEventListener('fs-aimbot', () => {
-    // localPlayer reads admin.isAimbotEnabled() at shoot time — no further action
+  window.addEventListener('fs-admin-toggled', (e) => {
+    if (!state.joined) return;
+    if (e.detail.open) {
+      // unlock mouse for the panel
+      suppressPause = true;
+      input.unlock();
+    } else {
+      // re-lock when the panel closes
+      requestLock();
+    }
   });
 }
 
@@ -139,7 +151,7 @@ function requestLock() {
   clearTimeout(lockAttemptTimer);
   lockAttemptTimer = setTimeout(() => {
     suppressPause = false;
-    if (state.joined && state.phase === 'playing' && !input.isLocked()) {
+    if (state.joined && state.phase === 'playing' && !input.isLocked() && !admin.isOpen()) {
       menu.showPaused();
     }
   }, 1200);
@@ -219,7 +231,6 @@ export function onMessage(msg) {
       remotePlayers.applySnapshot(msg.players);
       localPlayer.applySnapshot(msg.players, ackedSeq);
 
-      // update regenerating flag
       if (state.alive && state.health < PLAYER.MAX_HEALTH && state.lastDamageAt) {
         state.regenerating = Date.now() - state.lastDamageAt > 5000;
       } else {
