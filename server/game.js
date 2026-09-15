@@ -11,6 +11,7 @@ const state = {
   mapVotes: {},
   matchStartTime: 0,
   matchEndTime: 0,
+  postMatchEndsAt: 0,
   endReason: null,
   winner: null,
   healthPacks: [],
@@ -46,6 +47,7 @@ export function startMatch(now) {
   state.scores.blue = 0;
   state.matchStartTime = now;
   state.matchEndTime = now + MATCH.DURATION_MS;
+  state.postMatchEndsAt = 0;
   state.phase = 'playing';
   state.endReason = null;
   state.winner = null;
@@ -53,9 +55,11 @@ export function startMatch(now) {
 }
 
 export function endMatch(reason = 'time') {
+  const now = Date.now();
   state.phase = 'ended';
   state.endReason = reason;
   state.winner = computeWinner();
+  state.postMatchEndsAt = now + MATCH.POST_MATCH_MS;
 }
 
 function computeWinner() {
