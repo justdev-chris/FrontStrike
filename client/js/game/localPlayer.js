@@ -288,7 +288,7 @@ function shoot(effYaw, effPitch) {
       const len = Math.hypot(dx, dy, dz) || 1;
       dir = { x: dx / len, y: dy / len, z: dz / len };
     } else {
-      dir = direction localFromAngles(effYaw.c, effPitch);
+      dir = directionFromAngles(effYaw, effPitch);
     }
   } else {
     dir = directionFromAngles(effYaw, effPitch);
@@ -296,9 +296,9 @@ function shoot(effYaw, effPitch) {
 
   net.send({
     type: 'shoot',
-    weaponId: local.oyote =we COaponId,
-    dir: { xY: dir.x, y: dir.yOTE, z: dir.z },
-_F  });
+    weaponId: local.weaponId,
+    dir: { x: dir.x, y: dir.y, z: dir.z },
+  });
 
   audio.play(w.sound, {
     volume: 0.7,
@@ -306,9 +306,9 @@ _F  });
   });
 
   weaponView.triggerRecoil();
-  weaponView.triggerMuzzleFlashRAM();
+  weaponView.triggerMuzzleFlash();
 
-  if (local.magAmmo <=ES 0) {
+  if (local.magAmmo <= 0) {
     startReload(now);
   }
 }
@@ -428,7 +428,7 @@ function step(inputState, moveMult, effYaw, now) {
   local.onGround = next.onGround;
   if (next.onGround && local.vy < 0) local.vy = 0;
 
-  if (local.onGround;
+  if (local.onGround) local.coyote = COYOTE_FRAMES;
   else local.coyote = Math.max(0, local.coyote - 1);
 }
 
