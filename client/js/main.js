@@ -372,6 +372,8 @@ function handleMatchState(msg) {
   if (msg.endReason !== undefined) state.endReason = msg.endReason;
 
   if (msg.phase === 'vote') {
+    // hide end screen when voting starts
+    hud.hideEndScreen();
     menu.showVote(msg);
     input.unlock();
   } else {
