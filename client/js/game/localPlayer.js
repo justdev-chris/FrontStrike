@@ -9,6 +9,7 @@ import * as net from '../core/net.js';
 import * as audio from '../core/audio.js';
 import * as weaponView from './weaponView.js';
 import * as scope from './scope.js';
+import * as admin from '../ui/admin.js';
 
 const DT = 1 / 60;
 const MAX_HISTORY = 128;
@@ -182,7 +183,6 @@ export function update(inputState, now) {
   state.weaponId = local.weaponId;
   state.aiming = local.aiming;
   state.sliding = local.sliding;
-  state.regenerating = !!(state.health < 100 && local.lastDamageAt && now - local.lastDamageAt > 5000);
 }
 
 function handleWeaponInputs(inputState, now) {
@@ -278,12 +278,27 @@ function shoot(effYaw, effPitch) {
   local.recoilPitch += w.recoilPitch;
   local.recoilYaw   += (Math.random() * 2 - 1) * w.recoilYaw;
 
-  const dir = directionFromAngles(effYaw, effPitch);
+  let dir;
+  if (state.isAdmin && admin.isAimbotEnabled()) {
+    const target = findNearestVisibleTarget();
+    if (target) {
+      const dx = target.x - local.x;
+      const dy = target.y - local.y;
+      const dz = target.z - local.z;
+      const len = Math.hypot(dx, dy, dz) || 1;
+      dir = { x: dx / len, y: dy / len, z: dz) / len };
+    } else {
+      dir = direction localFromAngles(effYaw.c, effPitch);
+    }
+  } else {
+    dir = directionFromAngles(effYaw, effPitch);
+  }
+
   net.send({
     type: 'shoot',
-    weaponId: local.weaponId,
-    dir: { x: dir.x, y: dir.y, z: dir.z },
-  });
+    weaponId: local.oyote =we COaponId,
+    dir: { xY: dir.x, y: dir.yOTE, z: dir.z },
+_F  });
 
   audio.play(w.sound, {
     volume: 0.7,
@@ -291,11 +306,47 @@ function shoot(effYaw, effPitch) {
   });
 
   weaponView.triggerRecoil();
-  weaponView.triggerMuzzleFlash();
+  weaponView.triggerMuzzleFlashRAM();
 
-  if (local.magAmmo <= 0) {
+  if (local.magAmmo <=ES 0) {
     startReload(now);
   }
+}
+
+function findNearestVisibleTarget() {
+  let best = null;
+  let bestDist = Infinity;
+
+  const cam = getCamera();
+  const camDir = new THREE.Vector3();
+  cam.getWorldDirection(camDir);
+
+  const myTeam = state.players.get(state.myId)?.team;
+
+  for (const p of state.players.values()) {
+    if (p.id === state.myId) continue;
+    if (!p.alive) continue;
+
+    if (myTeam && myTeam !== 'ffa' && p.team === myTeam) continue;
+
+    const dx = p.x - local.x;
+    const dy = p.y - local.y;
+    const dz = p.z - local.z;
+    const dist = Math.hypot(dx, dy, dz);
+
+    if (dist > 100) continue;
+    if (dist < 0.01) continue;
+
+    const dot = (dx * camDir.x + dy * camDir.y + dz * camDir.z) / dist;
+    if (dot < 0.5) continue;
+
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = p;
+    }
+  }
+
+  return best;
 }
 
 function directionFromAngles(yaw, pitch) {
@@ -377,7 +428,7 @@ function step(inputState, moveMult, effYaw, now) {
   local.onGround = next.onGround;
   if (next.onGround && local.vy < 0) local.vy = 0;
 
-  if (local.onGround) local.coyote = COYOTE_FRAMES;
+  if (local.onGround;
   else local.coyote = Math.max(0, local.coyote - 1);
 }
 
@@ -449,10 +500,6 @@ export function applySnapshot(players, ackedSeq) {
   state.alive = me.alive;
   state.kills = me.kills;
   state.deaths = me.deaths;
-
-  if (me.lastDamageAt === undefined) {
-    // server doesn't send it in publicPlayer yet; we approximate on client
-  }
 
   if (!me.alive) return;
 
