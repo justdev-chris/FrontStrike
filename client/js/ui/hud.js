@@ -61,6 +61,7 @@ export function hide() { els.hud.classList.add('hidden'); }
 export function update(state) {
   els.healthValue.textContent = Math.ceil(state.health);
   els.healthValue.classList.toggle('low', state.health <= 25);
+  els.healthValue.classList.toggle('godmode', !!state.godmode);
 
   if (state.mode === 'tdm') {
     targetRedScore = state.scoreboard.red;
@@ -86,17 +87,16 @@ export function update(state) {
   }
 
   if (els.ammoMag && state.magAmmo !== undefined) {
-    els.ammoMag.textContent = state.magAmmo;
+    els.ammoMag.textContent = state.noReload ? '∞' : state.magAmmo;
     els.ammoReserve.textContent = '∞';
     if (els.weaponName) {
       els.weaponName.textContent = (state.weaponId || '').toUpperCase();
     }
     if (els.reloadBar) {
-      els.reloadBar.classList.toggle('active', !!state.reloading);
+      els.reloadBar.classList.toggle('active', !!state.reloading && !state.noReload);
     }
   }
 
-  // passive regen indicator
   if (els.regenIndicator) {
     const showRegen = state.alive && state.health < 100 && state.regenerating;
     els.regenIndicator.classList.toggle('hidden', !showRegen);
@@ -260,8 +260,6 @@ export function hideEmote() {
   clearTimeout(emoteTimeout);
   emoteTimeout = null;
 }
-
-// ---------- end-of-match screen ----------
 
 export function showEndScreen(state) {
   if (!els.endScreen) return;
