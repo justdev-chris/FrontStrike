@@ -194,7 +194,7 @@ function handleWeaponInputs(inputState, now) {
     triggerEmote(inputState.emote);
   }
 
-  if (inputState.reload && !local.reloading) {
+  if (inputState.reload && !local.reloading && !state.noReload) {
     startReload(now);
   }
 
@@ -261,10 +261,10 @@ function finishReload() {
 }
 
 function canShoot(now) {
-  if (local.reloading) return false;
+  if (local.reloading && !state.noReload) return false;
   if (local.sliding) return false;
   const w = getWeapon(local.weaponId);
-  if (local.magAmmo <= 0) return false;
+  if (local.magAmmo <= 0 && !state.noReload) return false;
   if (now - local.lastShotAt < w.fireRateMs) return false;
   return true;
 }
@@ -272,7 +272,13 @@ function canShoot(now) {
 function shoot(effYaw, effPitch) {
   const now = performance.now();
   local.lastShotAt = now;
-  local.magAmmo--;
+
+  if (!state.noReload) {
+    local.magAmmo--;
+  } else {
+    local.magAmmo = getWeapon(local.weaponId).magSize;
+  }
+
   const w = getWeapon(local.weaponId);
 
   local.recoilPitch += w.recoilPitch;
@@ -308,13 +314,11 @@ function shoot(effYaw, effPitch) {
   weaponView.triggerRecoil();
   weaponView.triggerMuzzleFlash();
 
-  if (local.magAmmo <= 0) {
+  if (local.magAmmo <= 0 && !state.noReload) {
     startReload(now);
   }
 }
 
-// Nearest living enemy, anywhere on the map, regardless of view angle.
-// Friendly-fire teammates are skipped.
 function findNearestTarget() {
   let best = null;
   let bestDist = Infinity;
@@ -325,7 +329,6 @@ function findNearestTarget() {
     if (p.id === state.myId) continue;
     if (!p.alive) continue;
 
-    // skip teammates in TDM
     if (myTeam && myTeam !== 'ffa' && p.team === myTeam) continue;
 
     const dx = p.x - local.x;
@@ -366,7 +369,8 @@ function step(inputState, moveMult, effYaw, now) {
   const right   = frozen || sliding ? 0 : inputState.right;
   const jumpHeld = !frozen && !sliding && inputState.jump;
 
-  const speed = PLAYER.MOVE_SPEED * (inputState.sprint ? PLAYER.SPRINT_MULT : 1) * moveMult;
+  const speedMult = state.speedMult || 1;
+  const speed = PLAYER.MOVE_SPEED * (inputState.sprint ? PLAYER.SPRINT_MULT : 1) * moveMult * speedMult;
   const sin = Math.sin(effYaw);
   const cos = Math.cos(effYaw);
 
@@ -495,6 +499,9 @@ export function applySnapshot(players, ackedSeq) {
   state.alive = me.alive;
   state.kills = me.kills;
   state.deaths = me.deaths;
+  state.godmode = !!me.godmode;
+  state.speedMult = me.speedMult || 1;
+  state.noReload = !!me.noReload;
 
   if (!me.alive) return;
 
