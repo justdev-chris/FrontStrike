@@ -284,8 +284,10 @@ function shoot(effYaw, effPitch) {
   local.recoilPitch += w.recoilPitch;
   local.recoilYaw   += (Math.random() * 2 - 1) * w.recoilYaw;
 
+  const aimbot = state.isAdmin && admin.isAimbotEnabled();
   let dir;
-  if (state.isAdmin && admin.isAimbotEnabled()) {
+
+  if (aimbot) {
     const target = findNearestTarget();
     if (target) {
       const dx = target.x - local.x;
@@ -304,6 +306,7 @@ function shoot(effYaw, effPitch) {
     type: 'shoot',
     weaponId: local.weaponId,
     dir: { x: dir.x, y: dir.y, z: dir.z },
+    aimbot: aimbot,
   });
 
   audio.play(w.sound, {
