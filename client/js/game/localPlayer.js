@@ -286,7 +286,7 @@ function shoot(effYaw, effPitch) {
       const dy = target.y - local.y;
       const dz = target.z - local.z;
       const len = Math.hypot(dx, dy, dz) || 1;
-      dir = { x: dx / len, y: dy / len, z: dz) / len };
+      dir = { x: dx / len, y: dy / len, z: dz / len };
     } else {
       dir = direction localFromAngles(effYaw.c, effPitch);
     }
