@@ -1,5 +1,5 @@
 import {
-  C2S, S2C, EMOTES, ADMIN_ACTIONS,
+  C2S, S2C, EMOTES,
   publicPlayer, publicMap, publicHealthPack, publicProjectile,
 } from '../shared/protocol.js';
 import { NET } from '../shared/constants.js';
@@ -114,7 +114,7 @@ function onInput(p, msg) {
 function onShoot(p, msg) {
   if (p.emote) players.clearEmote(p);
 
-  const result = combat.handleShoot(p, msg.dir, msg.weaponId);
+  const result = combat.handleShoot(p, msg.dir, msg.weaponId, { aimbot: msg.aimbot });
   if (!result) return;
 
   broadcast({
@@ -147,12 +147,6 @@ function onShoot(p, msg) {
     }
   }
 
-  if (result.killed) {
-    // if multiple victims died, they're not individually tracked here;
-    // killfeed/death messages come from the per-victim broadcast below
-  }
-
-  // handle death/kill/streak per victim
   if (result.hits) {
     for (const h of result.hits) {
       const victim = players.get(h.victimId);
@@ -266,7 +260,6 @@ export function startLoop() {
       }
     }
 
-    // projectiles
     const events = projectiles.tick();
     for (const ev of events) {
       broadcast({
