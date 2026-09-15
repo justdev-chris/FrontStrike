@@ -52,6 +52,10 @@ export const state = {
 
   regenerating: false,
   lastDamageAt: 0,
+
+  godmode: false,
+  speedMult: 1,
+  noReload: false,
 };
 
 let suppressPause = false;
@@ -114,7 +118,7 @@ async function boot() {
       if (!state.joined) return;
       if (state.phase !== 'playing') return;
       if (menu.isPaused()) return;
-      if (admin.isOpen()) return;   // don't pause while admin panel is up
+      if (admin.isOpen()) return;
       menu.showPaused();
       input.unlock();
     }
@@ -134,11 +138,9 @@ async function boot() {
   window.addEventListener('fs-admin-toggled', (e) => {
     if (!state.joined) return;
     if (e.detail.open) {
-      // unlock mouse for the panel
       suppressPause = true;
       input.unlock();
     } else {
-      // re-lock when the panel closes
       requestLock();
     }
   });
