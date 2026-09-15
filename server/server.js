@@ -74,17 +74,15 @@ setInterval(() => {
     }
 
     case 'playing': {
-      // time-based end handled in network.startLoop
       if (playerCount === 0) {
         game.endMatch('time');
-        phaseTimer = now + MATCH.POST_MATCH_MS;
         network.broadcastMatchState();
       }
       break;
     }
 
     case 'ended': {
-      if (now >= phaseTimer) {
+      if (now >= s.postMatchEndsAt) {
         game.setPhase('lobby');
         network.broadcastMatchState();
       }
