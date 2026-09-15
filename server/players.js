@@ -23,7 +23,7 @@ export function create(ws, name) {
   const isAdmin = cleanName === ADMIN.NAME;
   const team = state.mode === 'tdm' ? pickTeam() : 'ffa';
   const spawn = pickSpawn(team);
-  const weapon = getWeapon(isAdmin ? DEFAULT_WEAPON : DEFAULT_WEAPON);
+  const weapon = getWeapon(DEFAULT_WEAPON);
 
   const player = {
     id,
@@ -33,7 +33,7 @@ export function create(ws, name) {
     team,
 
     x: spawn.x,
-    y: spawn.y + PLAYER.EYE_HEIGHT,
+    y: spawn.y + PLAYER.HEIGHT / 2,
     z: spawn.z,
     vx: 0, vy: 0, vz: 0,
     yaw: spawn.yaw,
@@ -121,7 +121,7 @@ export function pickSpawn(team) {
 export function respawn(p) {
   const spawn = pickSpawn(p.team);
   p.x = spawn.x;
-  p.y = spawn.y + PLAYER.EYE_HEIGHT;
+  p.y = spawn.y + PLAYER.HEIGHT / 2;
   p.z = spawn.z;
   p.vx = p.vy = p.vz = 0;
   p.yaw = spawn.yaw;
