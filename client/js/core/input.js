@@ -18,6 +18,7 @@ const WEAPON_KEYS = {
   Digit3: 'shotgun',
   Digit4: 'sniper',
   Digit5: 'pistol',
+  Digit0: 'rpg',
 };
 
 const EMOTE_KEYS = {
