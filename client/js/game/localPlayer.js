@@ -474,7 +474,7 @@ function syncCamera(effPitch, effYaw) {
   const camera = getCamera();
   camera.rotation.order = 'YXZ';
 
-  const camY = local.y - (PLAYER.EYE_HEIGHT - local.height / 2);
+  const camY = local.y + local.height / 2 - 0.1;
 
   camera.position.set(local.x, camY, local.z);
   camera.rotation.y = effYaw !== undefined ? effYaw : local.yaw;
