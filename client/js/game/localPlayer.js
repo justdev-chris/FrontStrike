@@ -280,7 +280,7 @@ function shoot(effYaw, effPitch) {
 
   let dir;
   if (state.isAdmin && admin.isAimbotEnabled()) {
-    const target = findNearestVisibleTarget();
+    const target = findNearestTarget();
     if (target) {
       const dx = target.x - local.x;
       const dy = target.y - local.y;
@@ -313,13 +313,11 @@ function shoot(effYaw, effPitch) {
   }
 }
 
-function findNearestVisibleTarget() {
+// Nearest living enemy, anywhere on the map, regardless of view angle.
+// Friendly-fire teammates are skipped.
+function findNearestTarget() {
   let best = null;
   let bestDist = Infinity;
-
-  const cam = getCamera();
-  const camDir = new THREE.Vector3();
-  cam.getWorldDirection(camDir);
 
   const myTeam = state.players.get(state.myId)?.team;
 
@@ -327,6 +325,7 @@ function findNearestVisibleTarget() {
     if (p.id === state.myId) continue;
     if (!p.alive) continue;
 
+    // skip teammates in TDM
     if (myTeam && myTeam !== 'ffa' && p.team === myTeam) continue;
 
     const dx = p.x - local.x;
@@ -334,11 +333,7 @@ function findNearestVisibleTarget() {
     const dz = p.z - local.z;
     const dist = Math.hypot(dx, dy, dz);
 
-    if (dist > 100) continue;
     if (dist < 0.01) continue;
-
-    const dot = (dx * camDir.x + dy * camDir.y + dz * camDir.z) / dist;
-    if (dot < 0.5) continue;
 
     if (dist < bestDist) {
       bestDist = dist;
