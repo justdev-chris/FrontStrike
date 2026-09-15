@@ -118,6 +118,21 @@
     </div>
 
     <div class="admin-section">
+      <div class="admin-label">Godmode</div>
+      <button id="adminGodmode" class="admin-toggle">OFF</button>
+    </div>
+
+    <div class="admin-section">
+      <div class="admin-label">No Reload</div>
+      <button id="adminNoReload" class="admin-toggle">OFF</button>
+    </div>
+
+    <div class="admin-section">
+      <div class="admin-label">Speed <span id="adminSpeedValue" class="admin-value">1.0x</span></div>
+      <input id="adminSpeed" type="range" min="0.5" max="5" step="0.1" value="1" />
+    </div>
+
+    <div class="admin-section">
       <div class="admin-label">Give Weapon</div>
       <div class="admin-row">
         <select id="adminWeapon">
@@ -197,6 +212,7 @@
           <div class="footer-key">CTRL <span>slide</span></div>
           <div class="footer-key">SPACE <span>jump</span></div>
           <div class="footer-key">RMB <span>aim</span></div>
+          <div class="footer-key">Q <span>toggle aim</span></div>
           <div class="footer-key">1-5 <span>weapons</span></div>
           <div class="footer-key">R <span>reload</span></div>
           <div class="footer-key">TAB <span>scores</span></div>
