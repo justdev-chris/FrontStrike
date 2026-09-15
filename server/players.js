@@ -73,6 +73,11 @@ export function create(ws, name) {
     coyote: 0,
 
     kicked: false,
+
+    // admin modifiers
+    godmode: false,
+    speedMult: 1,
+    noReload: false,
   };
 
   players.set(id, player);
