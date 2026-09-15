@@ -38,7 +38,6 @@ export function tick() {
 }
 
 function tickSlide(p, now) {
-  // start a slide
   const wantSlide = p.input.crouch && p.input.sprint && !p.sliding;
   const speed = Math.hypot(p.vx, p.vz);
   const canSlide =
@@ -50,18 +49,15 @@ function tickSlide(p, now) {
   if (canSlide) {
     p.sliding = true;
     p.slideEndsAt = now + SLIDE.DURATION_MS;
-    // boost in current movement direction
     if (speed > 0.01) {
-      const bx = (p.vx / speed) * SLIDE.INITIAL_BOOST;
-      const bz = (p.vz / speed) * SLIDE.INITIAL_BOOST;
-      p.vx *= (1 + (SLIDE.INITIAL_BOOST - 1) * 0.6);
-      p.vz *= (1 + (SLIDE.INITIAL_BOOST - 1) * 0.6);
+      const boost = 1 + (SLIDE.INITIAL_BOOST - 1) * 0.6;
+      p.vx *= boost;
+      p.vz *= boost;
     }
   }
 
   if (!p.sliding) return;
 
-  // end conditions
   const expired = now >= p.slideEndsAt;
   const notCrouching = !p.input.crouch;
   const tooSlow = Math.hypot(p.vx, p.vz) < SLIDE.MIN_SPEED_TO_KEEP;
@@ -73,11 +69,9 @@ function tickSlide(p, now) {
     return;
   }
 
-  // apply friction
   p.vx *= SLIDE.FRICTION;
   p.vz *= SLIDE.FRICTION;
 
-  // lower profile
   p.height = PLAYER.CROUCH_HEIGHT;
 }
 
@@ -97,12 +91,12 @@ function tickMove(p, solids, now) {
   if (p.jumpBuffer === undefined) p.jumpBuffer = 0;
   if (p.coyote === undefined) p.coyote = 0;
 
-  // sliding forces movement direction — no free turning at full speed
   const sliding = p.sliding;
+  const speedMult = p.speedMult || 1;
 
   const speed = sliding
     ? 0
-    : PLAYER.MOVE_SPEED * (p.input.sprint ? PLAYER.SPRINT_MULT : 1);
+    : PLAYER.MOVE_SPEED * (p.input.sprint ? PLAYER.SPRINT_MULT : 1) * speedMult;
 
   let dx = 0, dz = 0;
   if (!sliding) {
@@ -121,7 +115,6 @@ function tickMove(p, solids, now) {
     dx = p.vx * DT;
     dz = p.vz * DT;
   } else {
-    // while sliding, use current velocity as-is
     dx = p.vx * DT;
     dz = p.vz * DT;
   }
