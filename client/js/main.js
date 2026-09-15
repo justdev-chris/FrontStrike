@@ -51,6 +51,7 @@ export const state = {
   projectiles: [],
 
   regenerating: false,
+  lastDamageAt: 0,
 };
 
 let suppressPause = false;
@@ -114,7 +115,8 @@ async function boot() {
       menu.showPaused();
       input.unlock();
     }
-    if (e.code === 'Backquote' && state.isAdmin) {
+    if (e.code === 'Backquote') {
+      if (!state.isAdmin) return;
       admin.toggle();
     }
   });
@@ -123,6 +125,10 @@ async function boot() {
     if (!state.joined) return;
     if (state.phase !== 'playing') return;
     menu.showPaused();
+  });
+
+  window.addEventListener('fs-aimbot', () => {
+    // localPlayer reads admin.isAimbotEnabled() at shoot time — no further action
   });
 }
 
@@ -212,6 +218,14 @@ export function onMessage(msg) {
 
       remotePlayers.applySnapshot(msg.players);
       localPlayer.applySnapshot(msg.players, ackedSeq);
+
+      // update regenerating flag
+      if (state.alive && state.health < PLAYER.MAX_HEALTH && state.lastDamageAt) {
+        state.regenerating = Date.now() - state.lastDamageAt > 5000;
+      } else {
+        state.regenerating = false;
+      }
+
       hud.update(state);
       break;
     }
@@ -252,6 +266,8 @@ export function onMessage(msg) {
       if (msg.victim === state.myId) {
         hud.flashDamage();
         audio.play('hurt', { volume: 0.9 });
+        state.lastDamageAt = Date.now();
+        state.regenerating = false;
       }
       if (msg.attacker === state.myId) {
         hud.showHitmarker();
@@ -266,6 +282,7 @@ export function onMessage(msg) {
         const killer = state.players.get(msg.killer);
         hud.showDeath(killer ? killer.name : null, PLAYER.RESPAWN_MS);
         audio.play(Math.random() < 0.5 ? 'death1' : 'death2', { volume: 0.9 });
+        state.regenerating = false;
       }
       if (msg.killer === state.myId) {
         const victim = state.players.get(msg.victim);
@@ -279,6 +296,8 @@ export function onMessage(msg) {
       if (msg.player.id === state.myId) {
         localPlayer.onRespawn(msg.player);
         hud.hideDeath();
+        state.lastDamageAt = 0;
+        state.regenerating = false;
       } else {
         remotePlayers.onRespawn(msg.player);
       }
@@ -299,6 +318,7 @@ export function onMessage(msg) {
     case 'adminResult':
       if (msg.action === 'kicked') {
         console.warn('[admin] you have been kicked:', msg.reason);
+        alert('You have been kicked: ' + (msg.reason || 'by admin'));
       }
       break;
 
@@ -380,7 +400,7 @@ function frame(now) {
   localPlayer.update(inputState, now);
   remotePlayers.update(now);
   weapons.update(now);
-  projectiles.update(now);
+  projectiles.update3D(now);
   nameTags.update();
 
   audio.updateListener();
