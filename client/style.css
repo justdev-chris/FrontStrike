@@ -1,6 +1,7 @@
 :root {
   --accent: #4f8;
   --accent-dim: #2c5c46;
+  --gold: #ffcc55;
   --red: #e35;
   --blue: #4af;
   --bg: #0a0a0c;
@@ -38,10 +39,6 @@ canvas#game {
 }
 
 .hidden { display: none !important; }
-
-/* =========================================================
-   HUD
-   ========================================================= */
 
 #hud {
   position: fixed;
@@ -160,6 +157,14 @@ canvas#game {
 }
 
 #healthValue.low { color: var(--red); }
+
+#healthValue.godmode {
+  color: var(--gold);
+  text-shadow:
+    0 0 8px rgba(255, 204, 85, 0.9),
+    0 0 20px rgba(255, 204, 85, 0.6),
+    0 0 40px rgba(255, 204, 85, 0.35);
+}
 
 #weaponName {
   font-size: 10px;
@@ -411,8 +416,6 @@ canvas#game {
   margin-left: 12px;
 }
 
-/* ---------- TAB scoreboard ---------- */
-
 #tabScoreboard {
   position: absolute;
   left: 50%;
@@ -539,8 +542,6 @@ canvas#game {
   font-size: 12px;
 }
 
-/* ---------- Death overlay ---------- */
-
 #deathOverlay {
   position: fixed;
   inset: 0;
@@ -576,8 +577,6 @@ canvas#game {
   opacity: 0.55;
   letter-spacing: 0.1em;
 }
-
-/* ---------- Announcement banner ---------- */
 
 #announcement {
   position: fixed;
@@ -616,8 +615,6 @@ canvas#game {
   from { opacity: 0; transform: translate(-50%, -8px); }
   to   { opacity: 1; transform: translate(-50%, 0); }
 }
-
-/* ---------- End screen ---------- */
 
 #endScreen {
   position: fixed;
@@ -772,8 +769,6 @@ canvas#game {
   text-transform: uppercase;
 }
 
-/* ---------- Admin panel ---------- */
-
 #adminPanel {
   position: fixed;
   top: 24px;
@@ -831,6 +826,16 @@ canvas#game {
   letter-spacing: 0.3em;
   color: var(--ink-faint);
   text-transform: uppercase;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.admin-value {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.05em;
+  font-size: 12px;
 }
 
 .admin-row {
@@ -898,9 +903,12 @@ canvas#game {
 
 .admin-toggle:hover { filter: brightness(1.2); }
 
-/* =========================================================
-   MENU SYSTEM
-   ========================================================= */
+.admin-section input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+  background: transparent;
+  cursor: pointer;
+}
 
 #menu, #vote, #paused, #namePrompt, #settingsPanel {
   position: fixed;
@@ -1135,10 +1143,6 @@ canvas#game {
   letter-spacing: 0.08em;
 }
 
-/* =========================================================
-   PROMPT PANELS
-   ========================================================= */
-
 .prompt-panel, .vote-panel {
   position: absolute;
   left: 50%;
@@ -1220,10 +1224,6 @@ canvas#game {
   font-size: 13px;
 }
 
-/* =========================================================
-   VOTE PANEL
-   ========================================================= */
-
 .vote-panel { min-width: 520px; }
 
 .vote-section { display: flex; flex-direction: column; gap: 12px; }
@@ -1264,10 +1264,6 @@ canvas#game {
   font-size: 11px;
   opacity: 0.7;
 }
-
-/* =========================================================
-   ANIMATIONS
-   ========================================================= */
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(-4px); }
