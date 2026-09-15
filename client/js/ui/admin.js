@@ -4,6 +4,8 @@ let els = {};
 let getState = () => ({});
 let send = () => {};
 let aimbotEnabled = false;
+let godmodeEnabled = false;
+let noReloadEnabled = false;
 let panelOpen = false;
 
 export function init(opts) {
@@ -14,6 +16,10 @@ export function init(opts) {
     panel:       document.getElementById('adminPanel'),
     close:       document.getElementById('adminClose'),
     aimbot:      document.getElementById('adminAimbot'),
+    godmode:     document.getElementById('adminGodmode'),
+    noReload:    document.getElementById('adminNoReload'),
+    speed:       document.getElementById('adminSpeed'),
+    speedValue:  document.getElementById('adminSpeedValue'),
     weapon:      document.getElementById('adminWeapon'),
     weaponTgt:   document.getElementById('adminWeaponTarget'),
     give:        document.getElementById('adminGive'),
@@ -34,6 +40,18 @@ export function init(opts) {
 
   els.close.addEventListener('click', hide);
   els.aimbot.addEventListener('click', toggleAimbot);
+  els.godmode.addEventListener('click', toggleGodmode);
+  els.noReload.addEventListener('click', toggleNoReload);
+
+  els.speed.addEventListener('input', () => {
+    const v = parseFloat(els.speed.value);
+    els.speedValue.textContent = v.toFixed(1) + 'x';
+    send({
+      type: 'adminAction',
+      action: ADMIN_ACTIONS.SET_SPEED,
+      mult: v,
+    });
+  });
 
   els.give.addEventListener('click', () => {
     send({
@@ -116,4 +134,34 @@ function toggleAimbot() {
 
 export function isAimbotEnabled() {
   return aimbotEnabled;
+}
+
+function toggleGodmode() {
+  godmodeEnabled = !godmodeEnabled;
+  els.godmode.classList.toggle('on', godmodeEnabled);
+  els.godmode.textContent = godmodeEnabled ? 'ON' : 'OFF';
+  send({
+    type: 'adminAction',
+    action: ADMIN_ACTIONS.SET_GODMODE,
+    enabled: godmodeEnabled,
+  });
+}
+
+export function isGodmodeEnabled() {
+  return godmodeEnabled;
+}
+
+function toggleNoReload() {
+  noReloadEnabled = !noReloadEnabled;
+  els.noReload.classList.toggle('on', noReloadEnabled);
+  els.noReload.textContent = noReloadEnabled ? 'ON' : 'OFF';
+  send({
+    type: 'adminAction',
+    action: ADMIN_ACTIONS.SET_NORELOAD,
+    enabled: noReloadEnabled,
+  });
+}
+
+export function isNoReloadEnabled() {
+  return noReloadEnabled;
 }
