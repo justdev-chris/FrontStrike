@@ -15,13 +15,16 @@ function getSolids(map) {
   return solids;
 }
 
-export function handleShoot(shooter, dir, requestedWeaponId) {
+export function handleShoot(shooter, dir, requestedWeaponId, opts = {}) {
   const now = Date.now();
   if (!shooter.alive) return null;
 
   const w = getWeapon(shooter.weaponId);
 
   if (w.adminOnly && !shooter.isAdmin) return null;
+
+  // aimbot is admin only, and only trusted if the server agrees they're admin
+  const aimbot = !!opts.aimbot && !!shooter.isAdmin;
 
   if (now - shooter.lastShotAt < w.fireRateMs) return null;
   if (shooter.reloading && !shooter.noReload) return null;
@@ -30,7 +33,6 @@ export function handleShoot(shooter, dir, requestedWeaponId) {
   shooter.lastShotAt = now;
 
   if (shooter.noReload) {
-    // mag stays full
     shooter.magAmmo = w.magSize;
   } else {
     shooter.magAmmo--;
@@ -81,8 +83,12 @@ export function handleShoot(shooter, dir, requestedWeaponId) {
       d = applySpread(d, w.spreadRad);
     }
 
-    const worldHit = raycastSolids(origin, d, w.range, solids);
-    const worldT = worldHit ? worldHit.t : w.range;
+    let worldT = w.range;
+    let worldHit = null;
+    if (!aimbot) {
+      worldHit = raycastSolids(origin, d, w.range, solids);
+      worldT = worldHit ? worldHit.t : w.range;
+    }
 
     const playerHit = raycastPlayers(origin, d, shooter, worldT, w);
 
