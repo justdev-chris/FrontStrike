@@ -4,29 +4,30 @@ let els = {};
 let getState = () => ({});
 let send = () => {};
 let aimbotEnabled = false;
+let panelOpen = false;
 
 export function init(opts) {
   getState = opts.getState;
   send = opts.send;
 
   els = {
-    panel:        document.getElementById('adminPanel'),
-    close:        document.getElementById('adminClose'),
-    aimbot:       document.getElementById('adminAimbot'),
-    weapon:       document.getElementById('adminWeapon'),
-    weaponTgt:    document.getElementById('adminWeaponTarget'),
-    give:         document.getElementById('adminGive'),
-    slapTgt:      document.getElementById('adminSlapTarget'),
-    slap:         document.getElementById('adminSlap'),
-    kickTgt:      document.getElementById('adminKickTarget'),
-    kick:         document.getElementById('adminKick'),
-    tpTgt:        document.getElementById('adminTpTarget'),
-    tpX:          document.getElementById('adminTpX'),
-    tpY:          document.getElementById('adminTpY'),
-    tpZ:          document.getElementById('adminTpZ'),
-    tp:           document.getElementById('adminTp'),
+    panel:       document.getElementById('adminPanel'),
+    close:       document.getElementById('adminClose'),
+    aimbot:      document.getElementById('adminAimbot'),
+    weapon:      document.getElementById('adminWeapon'),
+    weaponTgt:   document.getElementById('adminWeaponTarget'),
+    give:        document.getElementById('adminGive'),
+    slapTgt:     document.getElementById('adminSlapTarget'),
+    slap:        document.getElementById('adminSlap'),
+    kickTgt:     document.getElementById('adminKickTarget'),
+    kick:        document.getElementById('adminKick'),
+    tpTgt:       document.getElementById('adminTpTarget'),
+    tpX:         document.getElementById('adminTpX'),
+    tpY:         document.getElementById('adminTpY'),
+    tpZ:         document.getElementById('adminTpZ'),
+    tp:          document.getElementById('adminTp'),
     announceText: document.getElementById('adminAnnounceText'),
-    announce:     document.getElementById('adminAnnounce'),
+    announce:    document.getElementById('adminAnnounce'),
   };
 
   if (!els.panel) return;
@@ -44,36 +45,29 @@ export function init(opts) {
   });
 
   els.slap.addEventListener('click', () => {
-    const target = els.slapTgt.value.trim();
-    if (!target) return;
     send({
       type: 'adminAction',
       action: ADMIN_ACTIONS.SLAP,
-      targetName: target,
+      targetName: els.slapTgt.value.trim(),
     });
   });
 
   els.kick.addEventListener('click', () => {
-    const target = els.kickTgt.value.trim();
-    if (!target) return;
     send({
       type: 'adminAction',
       action: ADMIN_ACTIONS.KICK,
-      targetName: target,
+      targetName: els.kickTgt.value.trim(),
     });
   });
 
   els.tp.addEventListener('click', () => {
-    const x = parseFloat(els.tpX.value);
-    const y = parseFloat(els.tpY.value);
-    const z = parseFloat(els.tpZ.value);
     send({
       type: 'adminAction',
       action: ADMIN_ACTIONS.TELEPORT,
       targetName: els.tpTgt.value.trim() || undefined,
-      x: Number.isFinite(x) ? x : undefined,
-      y: Number.isFinite(y) ? y : undefined,
-      z: Number.isFinite(z) ? z : undefined,
+      x: parseFloat(els.tpX.value),
+      y: parseFloat(els.tpY.value),
+      z: parseFloat(els.tpZ.value),
     });
   });
 
@@ -91,27 +85,35 @@ export function init(opts) {
 
 export function toggle() {
   if (!els.panel) return;
-  els.panel.classList.toggle('hidden');
+  if (panelOpen) hide();
+  else show();
 }
 
 export function show() {
   if (!els.panel) return;
   els.panel.classList.remove('hidden');
+  panelOpen = true;
+  window.dispatchEvent(new CustomEvent('fs-admin-toggled', { detail: { open: true } }));
 }
 
 export function hide() {
   if (!els.panel) return;
   els.panel.classList.add('hidden');
+  panelOpen = false;
+  window.dispatchEvent(new CustomEvent('fs-admin-toggled', { detail: { open: false } }));
 }
 
-export function isAimbotEnabled() {
-  return aimbotEnabled;
+export function isOpen() {
+  return panelOpen;
 }
 
 function toggleAimbot() {
   aimbotEnabled = !aimbotEnabled;
-  if (els.aimbot) {
-    els.aimbot.classList.toggle('on', aimbotEnabled);
-    els.aimbot.textContent = aimbotEnabled ? 'ON' : 'OFF';
-  }
+  els.aimbot.classList.toggle('on', aimbotEnabled);
+  els.aimbot.textContent = aimbotEnabled ? 'ON' : 'OFF';
+  window.dispatchEvent(new CustomEvent('fs-aimbot', { detail: { enabled: aimbotEnabled } }));
+}
+
+export function isAimbotEnabled() {
+  return aimbotEnabled;
 }
