@@ -42,10 +42,10 @@ export const EMOTES = {
 };
 
 export const EMOTE_KEYS = {
-  Digit5: 'wave',
-  Digit6: 'dance',
-  Digit7: 'taunt',
-  Digit8: 'point',
+  Digit6: 'wave',
+  Digit7: 'dance',
+  Digit8: 'taunt',
+  Digit9: 'point',
 };
 
 export const STREAKS = {
@@ -61,6 +61,9 @@ export const ADMIN_ACTIONS = {
   TELEPORT: 'teleport',
   GIVE_WEAPON: 'giveWeapon',
   ANNOUNCE: 'announce',
+  SET_GODMODE: 'setGodmode',
+  SET_SPEED: 'setSpeed',
+  SET_NORELOAD: 'setNoReload',
 };
 
 export function publicPlayer(p) {
@@ -81,6 +84,9 @@ export function publicPlayer(p) {
     streak: p.streak || 0,
     sliding: !!p.sliding,
     isAdmin: !!p.isAdmin,
+    godmode: !!p.godmode,
+    speedMult: p.speedMult || 1,
+    noReload: !!p.noReload,
   };
 }
 
