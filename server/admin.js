@@ -16,7 +16,6 @@ export function handleAdminAction(admin, msg) {
         action: 'kicked',
         reason: msg.reason || 'kicked by admin',
       });
-      // server close is handled in network.js when kicked flag set
       break;
     }
 
@@ -56,6 +55,28 @@ export function handleAdminAction(admin, msg) {
         text,
         from: admin.name,
       });
+      break;
+    }
+
+    case ADMIN_ACTIONS.SET_GODMODE: {
+      admin.godmode = !!msg.enabled;
+      break;
+    }
+
+    case ADMIN_ACTIONS.SET_SPEED: {
+      let mult = Number(msg.mult);
+      if (!Number.isFinite(mult)) mult = 1;
+      mult = Math.max(0.5, Math.min(5, mult));
+      admin.speedMult = mult;
+      break;
+    }
+
+    case ADMIN_ACTIONS.SET_NORELOAD: {
+      admin.noReload = !!msg.enabled;
+      if (admin.noReload) {
+        const w = players.get(admin.id)?.weaponId;
+        if (w) admin.magAmmo = 999;
+      }
       break;
     }
 
