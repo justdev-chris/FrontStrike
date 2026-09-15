@@ -21,17 +21,21 @@ export function handleShoot(shooter, dir, requestedWeaponId) {
 
   const w = getWeapon(shooter.weaponId);
 
-  // admin-only weapons
   if (w.adminOnly && !shooter.isAdmin) return null;
 
   if (now - shooter.lastShotAt < w.fireRateMs) return null;
-  if (shooter.reloading) return null;
-  if (shooter.magAmmo <= 0) return null;
+  if (shooter.reloading && !shooter.noReload) return null;
+  if (shooter.magAmmo <= 0 && !shooter.noReload) return null;
 
   shooter.lastShotAt = now;
-  shooter.magAmmo--;
 
-  // projectiles (RPG)
+  if (shooter.noReload) {
+    // mag stays full
+    shooter.magAmmo = w.magSize;
+  } else {
+    shooter.magAmmo--;
+  }
+
   if (w.projectile) {
     const len = Math.hypot(dir.x, dir.y, dir.z) || 1;
     const d = { x: dir.x / len, y: dir.y / len, z: dir.z / len };
@@ -62,13 +66,11 @@ export function handleShoot(shooter, dir, requestedWeaponId) {
     };
   }
 
-  // hitscan — shotgun fires N pellets
   const pellets = w.pellets || 1;
   const map = game.getMap();
   const solids = getSolids(map);
   const origin = { x: shooter.x, y: shooter.y, z: shooter.z };
 
-  let totalDamage = 0;
   let firstHit = null;
   let firstHitPoint = null;
   const hitsByVictim = new Map();
@@ -85,7 +87,7 @@ export function handleShoot(shooter, dir, requestedWeaponId) {
     const playerHit = raycastPlayers(origin, d, shooter, worldT, w);
 
     if (playerHit) {
-      const { victim, t, point, damage } = playerHit;
+      const { victim, point, damage } = playerHit;
       const prev = hitsByVictim.get(victim.id) || { victim, damage: 0, point };
       prev.damage += damage;
       prev.point = point;
@@ -98,7 +100,6 @@ export function handleShoot(shooter, dir, requestedWeaponId) {
     }
   }
 
-  // apply damage per victim
   let killedFlag = false;
   let streakLabel = null;
   let limitFlag = false;
@@ -115,8 +116,8 @@ export function handleShoot(shooter, dir, requestedWeaponId) {
     dir: normalized(dir),
     hit: firstHit ? firstHit.id : null,
     point: firstHitPoint,
-    t: firstHitPoint ? 0 : w.range,
-    damage: totalDamage,
+    t: 0,
+    damage: 0,
     killed: killedFlag,
     streak: streakLabel,
     hitLimit: limitFlag,
@@ -136,11 +137,9 @@ function normalized(dir) {
 }
 
 function applySpread(dir, spreadRad) {
-  // jitter the direction within a cone
   const theta = Math.random() * Math.PI * 2;
   const r = Math.sqrt(Math.random()) * spreadRad;
 
-  // build a local frame
   const up = Math.abs(dir.y) < 0.99 ? { x: 0, y: 1, z: 0 } : { x: 1, y: 0, z: 0 };
   const right = norm(cross(dir, up));
   const realUp = norm(cross(right, dir));
@@ -230,6 +229,10 @@ function rayAABB(o, d, box) {
 }
 
 export function applyDamage(attacker, victim, dmg) {
+  if (victim.godmode) {
+    return { killed: false, streak: null, hitLimit: false };
+  }
+
   victim.health -= dmg;
   victim.lastDamageAt = Date.now();
 
@@ -258,7 +261,6 @@ export function applyDamage(attacker, victim, dmg) {
   return { killed: true, streak: streakName, hitLimit };
 }
 
-// damage from explosions (no headshot bonus, no streak tracking here)
 export function applyExplosionDamage(attacker, victim, dmg) {
   if (!victim.alive) return { killed: false };
   return applyDamage(attacker, victim, dmg);
