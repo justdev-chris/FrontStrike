@@ -3,7 +3,8 @@ let mouseDX = 0;
 let mouseDY = 0;
 let locked = false;
 let firing = false;
-let aiming = false;
+let mouseAiming = false;
+let toggleAiming = false;
 let scoreboardHeld = false;
 
 let reloadRequested = false;
@@ -30,6 +31,13 @@ const EMOTE_KEYS = {
 
 export function init() {
   window.addEventListener('keydown', (e) => {
+    // toggle aim with Q
+    if (e.code === 'KeyQ') {
+      e.preventDefault();
+      toggleAiming = !toggleAiming;
+      return;
+    }
+
     keys.add(e.code);
     if (e.code === 'Space') e.preventDefault();
     if (e.code === 'Tab') {
@@ -58,7 +66,7 @@ export function init() {
     scoreboardHeld = false;
     keys.clear();
     firing = false;
-    aiming = false;
+    mouseAiming = false;
   });
 
   document.addEventListener('mousemove', (e) => {
@@ -76,12 +84,12 @@ export function init() {
   document.addEventListener('mousedown', (e) => {
     if (!locked) return;
     if (e.button === 0) firing = true;
-    if (e.button === 2) aiming = true;
+    if (e.button === 2) mouseAiming = true;
   });
 
   document.addEventListener('mouseup', (e) => {
     if (e.button === 0) firing = false;
-    if (e.button === 2) aiming = false;
+    if (e.button === 2) mouseAiming = false;
   });
 
   document.addEventListener('contextmenu', (e) => {
@@ -90,7 +98,10 @@ export function init() {
 
   document.addEventListener('pointerlockchange', () => {
     locked = document.pointerLockElement === document.body;
-    if (!locked) firing = false;
+    if (!locked) {
+      firing = false;
+      mouseAiming = false;
+    }
   });
 
   document.addEventListener('pointerlockerror', () => {
@@ -131,7 +142,7 @@ export function sample() {
     sprint: keys.has('ShiftLeft') || keys.has('ShiftRight'),
     crouch: keys.has('ControlLeft') || keys.has('ControlRight') || keys.has('KeyC'),
     fire: firing,
-    aim: aiming,
+    aim: mouseAiming || toggleAiming,
     reload: reloadRequested,
     switchWeapon: pendingSwitch,
     emote: pendingEmote,
