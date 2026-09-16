@@ -8,6 +8,14 @@ let myVoteMode = null;
 let myVoteMap = null;
 let pausedVisible = false;
 
+const MODES = ['dm', 'tdm', 'gungame', 'ctf'];
+const MODE_LABELS = {
+  dm: 'DM',
+  tdm: 'TDM',
+  gungame: 'GUN GAME',
+  ctf: 'CTF',
+};
+
 const settings = {
   sensitivity: 2.2,
   fov: 80,
@@ -174,11 +182,11 @@ export function hideVote() {
 
 function buildModeVoteOptions() {
   els.modeVote.innerHTML = '';
-  for (const mode of ['dm', 'tdm']) {
+  for (const mode of MODES) {
     const btn = document.createElement('div');
     btn.className = 'vote-option';
     btn.dataset.mode = mode;
-    btn.textContent = mode.toUpperCase();
+    btn.textContent = MODE_LABELS[mode];
     btn.addEventListener('click', () => {
       myVoteMode = mode;
       net.send({ type: 'voteMode', mode });
@@ -217,7 +225,7 @@ function updateVoteCounts(state) {
   for (const btn of els.modeVote.children) {
     const mode = btn.dataset.mode;
     const count = modeCounts[mode] || 0;
-    btn.innerHTML = `${mode.toUpperCase()}<span class="count">${count}</span>`;
+    btn.innerHTML = `${MODE_LABELS[mode]}<span class="count">${count}</span>`;
     btn.classList.toggle('voted', mode === myVoteMode);
   }
 
