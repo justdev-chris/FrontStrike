@@ -5,6 +5,8 @@ import { getMaterialTiled } from './textures.js';
 let group = null;
 let currentMapId = null;
 const healthPackMeshes = new Map();
+const platformMeshes = new Map();
+let flagMeshes = null;
 
 export function build(map) {
   if (!map) return;
@@ -15,6 +17,8 @@ export function build(map) {
     disposeGroup(group);
     group = null;
     healthPackMeshes.clear();
+    platformMeshes.clear();
+    flagMeshes = null;
   }
 
   group = new THREE.Group();
@@ -42,6 +46,9 @@ export function build(map) {
 
   addSpawnPads(map.spawns);
   addHealthPacks(map.healthPacks || []);
+  addJumpPads(map.jumpPads || []);
+  addMovingPlatforms(map.movingPlatforms || []);
+  addFlags(map.flags || null);
 
   getScene().add(group);
 }
@@ -60,6 +67,24 @@ export function updateHealthPacks(packs) {
     if (hp.active) {
       mesh.position.set(hp.x, hp.y + 0.5, hp.z);
     }
+  }
+}
+
+export function updatePlatforms(platforms) {
+  if (!platforms || !group) return;
+  for (const pl of platforms) {
+    const mesh = platformMeshes.get(pl.id);
+    if (!mesh) continue;
+    mesh.position.set(pl.x, pl.y, pl.z);
+  }
+}
+
+export function updateFlags(flags) {
+  if (!flags || !group || !flagMeshes) return;
+  for (const f of flags) {
+    const mesh = flagMeshes[f.team];
+    if (!mesh) continue;
+    mesh.position.set(f.x, f.y + 1.5, f.z);
   }
 }
 
@@ -114,6 +139,116 @@ function createHealthPackMesh() {
   return g;
 }
 
+function addJumpPads(list) {
+  for (const pad of list) {
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(1.2, 1.6, 32),
+      new THREE.MeshBasicMaterial({
+        color: 0x4fc3ff,
+        transparent: true,
+        opacity: 0.55,
+        side: THREE.DoubleSide,
+      })
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(pad.x, pad.y + 0.03, pad.z);
+    group.add(ring);
+
+    const inner = new THREE.Mesh(
+      new THREE.CircleGeometry(1.1, 32),
+      new THREE.MeshBasicMaterial({
+        color: 0x4fc3ff,
+        transparent: true,
+        opacity: 0.15,
+        side: THREE.DoubleSide,
+      })
+    );
+    inner.rotation.x = -Math.PI / 2;
+    inner.position.set(pad.x, pad.y + 0.02, pad.z);
+    group.add(inner);
+  }
+}
+
+function addMovingPlatforms(list) {
+  for (const pl of list) {
+    const geo = new THREE.BoxGeometry(pl.w, pl.h, pl.d);
+    const mat = getMaterialTiled(pl.mat || 'metal', Math.max(1, pl.w / 2), Math.max(1, pl.d / 2));
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(pl.x, pl.y, pl.z);
+    group.add(mesh);
+
+    const edges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(geo),
+      new THREE.LineBasicMaterial({ color: 0x4fc3ff })
+    );
+    edges.position.copy(mesh.position);
+    group.add(edges);
+
+    // store edges with the mesh so both move together
+    mesh.userData.edges = edges;
+    platformMeshes.set(pl.id, mesh);
+
+    // update edges when mesh moves — patch updatePlatforms to move both
+    const originalPos = mesh.position;
+    mesh.userData.updateEdges = () => {
+      edges.position.copy(originalPos);
+    };
+  }
+}
+
+function addFlags(flags) {
+  if (!flags) {
+    flagMeshes = null;
+    return;
+  }
+
+  flagMeshes = {
+    red: createFlag('red'),
+    blue: createFlag('blue'),
+  };
+
+  flagMeshes.red.position.set(flags.red.x, flags.red.y + 1.5, flags.red.z);
+  flagMeshes.blue.position.set(flags.blue.x, flags.blue.y + 1.5, flags.blue.z);
+
+  group.add(flagMeshes.red);
+  group.add(flagMeshes.blue);
+}
+
+function createFlag(team) {
+  const g = new THREE.Group();
+
+  const color = team === 'red' ? 0xe3354a : 0x3b7ac2;
+
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.05, 0.05, 3, 8),
+    new THREE.MeshLambertMaterial({ color: 0x3a3a3a })
+  );
+  pole.position.y = -1.5;
+  g.add(pole);
+
+  const cloth = new THREE.Mesh(
+    new THREE.BoxGeometry(1.0, 0.6, 0.08),
+    new THREE.MeshLambertMaterial({ color })
+  );
+  cloth.position.set(0.5, -0.6, 0);
+  g.add(cloth);
+
+  const glow = new THREE.Mesh(
+    new THREE.RingGeometry(0.9, 1.3, 24),
+    new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.4,
+      side: THREE.DoubleSide,
+    })
+  );
+  glow.rotation.x = -Math.PI / 2;
+  glow.position.y = -1.48;
+  g.add(glow);
+
+  return g;
+}
+
 function addBox(s) {
   const geo = new THREE.BoxGeometry(s.w, s.h, s.d);
   const repU = Math.max(1, Math.round(Math.max(s.w, s.d) / 2));
@@ -138,7 +273,6 @@ function addRamp(s) {
   mesh.position.set(s.x, s.y, s.z);
   group.add(mesh);
 
-  // Only outer silhouette edges (12 edges of the wedge), not triangle diagonals
   const edges = new THREE.LineSegments(
     buildRampOutline(s),
     edgeLineFor(s.mat)
@@ -153,57 +287,30 @@ function buildRampGeometry(s) {
 
   const tops = cornerHeights(s);
 
-  // 8 vertices
-  // bottom (0-3), top (4-7)
   const positions = new Float32Array([
-    // bottom
     -hw, 0,       -hd,
      hw, 0,       -hd,
      hw, 0,        hd,
     -hw, 0,        hd,
-    // top
     -hw, tops[0], -hd,
      hw, tops[1], -hd,
      hw, tops[2],  hd,
     -hw, tops[3],  hd,
   ]);
 
-  // faces: bottom quad, top quad, 4 sides
   const indices = [
-    // bottom
     0, 2, 1,  0, 3, 2,
-    // top
     4, 5, 6,  4, 6, 7,
-    // sides
-    0, 1, 5,  0, 5, 4,   // -Z
-    1, 2, 6,  1, 6, 5,   // +X
-    2, 3, 7,  2, 7, 6,   // +Z
-    3, 0, 4,  3, 4, 7,   // -X
+    0, 1, 5,  0, 5, 4,
+    1, 2, 6,  1, 6, 5,
+    2, 3, 7,  2, 7, 6,
+    3, 0, 4,  3, 4, 7,
   ];
 
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geo.setIndex(indices);
 
-  // proper UVs per face
-  const uvs = new Float32Array([
-    0, 0,  1, 0,  1, 1,  0, 1,   // bottom
-    0, 0,  1, 0,  1, 1,  0, 1,   // top
-  ]);
-
-  // side faces reuse scaled UVs from their corner coordinates
-  // (approximate; each side is a quad)
-  const sideUVs = new Float32Array([
-    0, 0, 1, 0, 1, 1, 0, 1,
-    0, 0, 1, 0, 1, 1, 0, 1,
-    0, 0, 1, 0, 1, 1, 0, 1,
-    0, 0, 1, 0, 1, 1, 0, 1,
-  ]);
-
-  const fullUVs = new Float32Array([...uvs, ...sideUVs]);
-
-  // We have 8 verts but each face vertex may need its own UV.
-  // Simplest: non-indexed geometry with per-triangle UVs.
   const nonIndexed = geo.toNonIndexed();
   geo.dispose();
 
@@ -212,18 +319,11 @@ function buildRampGeometry(s) {
 
   for (let i = 0; i < pos.count; i += 3) {
     const tri = i / 3;
-    if (tri < 2) {
-      // bottom triangle
-      uvArr[i*2]     = 0; uvArr[i*2+1]     = 0;
-      uvArr[(i+1)*2] = 1; uvArr[(i+1)*2+1] = 0;
-      uvArr[(i+2)*2] = 1; uvArr[(i+2)*2+1] = 1;
-    } else if (tri < 4) {
-      // top triangle
+    if (tri < 2 || tri < 4) {
       uvArr[i*2]     = 0; uvArr[i*2+1]     = 0;
       uvArr[(i+1)*2] = 1; uvArr[(i+1)*2+1] = 0;
       uvArr[(i+2)*2] = 1; uvArr[(i+2)*2+1] = 1;
     } else {
-      // side triangles — scaled by aspect
       uvArr[i*2]     = 0; uvArr[i*2+1]     = 0;
       uvArr[(i+1)*2] = 1; uvArr[(i+1)*2+1] = 0;
       uvArr[(i+2)*2] = 1; uvArr[(i+2)*2+1] = 1;
@@ -252,9 +352,9 @@ function buildRampOutline(s) {
   ];
 
   const edgePairs = [
-    [0,1],[1,2],[2,3],[3,0],   // bottom
-    [4,5],[5,6],[6,7],[7,4],   // top
-    [0,4],[1,5],[2,6],[3,7],   // verticals
+    [0,1],[1,2],[2,3],[3,0],
+    [4,5],[5,6],[6,7],[7,4],
+    [0,4],[1,5],[2,6],[3,7],
   ];
 
   const pts = [];
@@ -262,8 +362,7 @@ function buildRampOutline(s) {
     pts.push(v[a], v[b]);
   }
 
-  const geo = new THREE.BufferGeometry().setFromPoints(pts);
-  return geo;
+  return new THREE.BufferGeometry().setFromPoints(pts);
 }
 
 function cornerHeights(s) {
