@@ -1,5 +1,6 @@
 import { PLAYER, ADMIN } from '../shared/constants.js';
 import { getWeapon, DEFAULT_WEAPON } from '../shared/weapons.js';
+import { GUN_GAME_ORDER } from '../shared/protocol.js';
 import * as game from './game.js';
 
 let nextId = 1;
@@ -21,9 +22,13 @@ export function create(ws, name) {
 
   const cleanName = sanitizeName(name) || `Player${id}`;
   const isAdmin = cleanName === ADMIN.NAME;
-  const team = state.mode === 'tdm' ? pickTeam() : 'ffa';
+  const team = game.isTeamMode() ? pickTeam() : 'ffa';
   const spawn = pickSpawn(team);
-  const weapon = getWeapon(DEFAULT_WEAPON);
+
+  // gun game starts at first weapon, otherwise default
+  const startWeapon = state.mode === 'gungame'
+    ? getWeapon(GUN_GAME_ORDER[0])
+    : getWeapon(DEFAULT_WEAPON);
 
   const player = {
     id,
@@ -50,14 +55,15 @@ export function create(ws, name) {
     kills: 0,
     deaths: 0,
     streak: 0,
+    gunGameIndex: 0,
 
     lastInputSeq: 0,
     inputHistory: [],
 
     input: { forward: 0, right: 0, jump: false, sprint: false, crouch: false },
 
-    weaponId: weapon.id,
-    magAmmo: weapon.magSize,
+    weaponId: startWeapon.id,
+    magAmmo: startWeapon.magSize,
     reloading: false,
     reloadEndsAt: 0,
     aiming: false,
@@ -74,10 +80,12 @@ export function create(ws, name) {
 
     kicked: false,
 
-    // admin modifiers
     godmode: false,
     speedMult: 1,
     noReload: false,
+
+    spectating: null,
+    carryingFlag: null,
   };
 
   players.set(id, player);
@@ -136,8 +144,15 @@ export function respawn(p) {
   p.onGround = true;
   p.inputHistory = [];
 
-  const w = getWeapon(p.weaponId);
-  p.magAmmo = w.magSize;
+  // in gun game, respawn with current progress weapon
+  if (game.getState().mode === 'gungame') {
+    const w = getWeapon(GUN_GAME_ORDER[p.gunGameIndex] || GUN_GAME_ORDER[0]);
+    p.weaponId = w.id;
+    p.magAmmo = w.magSize;
+  } else {
+    const w = getWeapon(p.weaponId);
+    p.magAmmo = w.magSize;
+  }
   p.reloading = false;
   p.reloadEndsAt = 0;
   p.aiming = false;
@@ -152,6 +167,8 @@ export function respawn(p) {
   p.height = PLAYER.HEIGHT;
   p.jumpBuffer = 0;
   p.coyote = 0;
+
+  p.spectating = null;
 }
 
 export function setEmote(p, emoteId, durationMs) {
@@ -192,6 +209,19 @@ export function teleport(p, x, y, z) {
   p.vy = 0;
   p.vz = 0;
   p.onGround = false;
+}
+
+export function advanceGunGame(p) {
+  const max = GUN_GAME_ORDER.length - 1;
+  if (p.gunGameIndex < max) {
+    p.gunGameIndex++;
+  }
+  const w = getWeapon(GUN_GAME_ORDER[p.gunGameIndex]);
+  p.weaponId = w.id;
+  p.magAmmo = w.magSize;
+  p.reloading = false;
+  p.reloadEndsAt = 0;
+  return p.gunGameIndex >= max;
 }
 
 function sanitizeName(name) {
