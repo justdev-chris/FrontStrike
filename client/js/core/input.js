@@ -10,6 +10,7 @@ let scoreboardHeld = false;
 let reloadRequested = false;
 let pendingSwitch = null;
 let pendingEmote = null;
+let spectateCycle = 0;
 
 const MAX_DELTA = 100;
 
@@ -31,7 +32,6 @@ const EMOTE_KEYS = {
 
 export function init() {
   window.addEventListener('keydown', (e) => {
-    // toggle aim with Q
     if (e.code === 'KeyQ') {
       e.preventDefault();
       toggleAiming = !toggleAiming;
@@ -134,6 +134,12 @@ export function isScoreboardHeld() {
   return scoreboardHeld;
 }
 
+export function consumeSpectateCycle() {
+  const v = spectateCycle;
+  spectateCycle = 0;
+  return v;
+}
+
 export function sample() {
   const s = {
     forward: 0,
@@ -148,12 +154,23 @@ export function sample() {
     emote: pendingEmote,
     dx: mouseDX,
     dy: mouseDY,
+    spectateNext: false,
+    spectatePrev: false,
   };
 
   if (keys.has('KeyW')) s.forward += 1;
   if (keys.has('KeyS')) s.forward -= 1;
   if (keys.has('KeyD')) s.right += 1;
   if (keys.has('KeyA')) s.right -= 1;
+
+  // spectate cycling while dead
+  if (firing) {
+    s.spectateNext = true;
+    firing = false;
+  }
+  if (mouseAiming) {
+    s.spectatePrev = true;
+  }
 
   mouseDX = 0;
   mouseDY = 0;
