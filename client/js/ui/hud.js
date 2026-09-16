@@ -9,11 +9,20 @@ let scoreboardVisible = false;
 let emoteTimeout = null;
 let streakTimeout = null;
 let announceTimeout = null;
+let killcamTimeout = null;
+let flagEventTimeout = null;
 
 let displayRedScore = 0;
 let displayBlueScore = 0;
 let targetRedScore = 0;
 let targetBlueScore = 0;
+
+const MODE_NAMES = {
+  dm: 'DEATHMATCH',
+  tdm: 'TEAM DEATHMATCH',
+  gungame: 'GUN GAME',
+  ctf: 'CAPTURE THE FLAG',
+};
 
 export function init() {
   els = {
@@ -24,6 +33,7 @@ export function init() {
     ammoReserve:   document.getElementById('ammoReserve'),
     weaponName:    document.getElementById('weaponName'),
     reloadBar:     document.getElementById('reloadBar'),
+    gunGameProgress: document.getElementById('gunGameProgress'),
     killfeed:      document.getElementById('killfeed'),
     hitmarker:     document.getElementById('hitmarker'),
     damageFlash:   document.getElementById('damageFlash'),
@@ -52,6 +62,15 @@ export function init() {
     endTitle:      document.getElementById('endTitle'),
     endSubtitle:   document.getElementById('endSubtitle'),
     endLeaderboard: document.getElementById('endLeaderboard'),
+
+    killcam:       document.getElementById('killcam'),
+    killcamName:   document.getElementById('killcamName'),
+
+    flagHud:       document.getElementById('flagHud'),
+    flagStatus:    document.getElementById('flagStatus'),
+
+    spectatorHud:   document.getElementById('spectatorHud'),
+    spectatorTarget: document.getElementById('spectatorTarget'),
   };
 }
 
@@ -63,7 +82,7 @@ export function update(state) {
   els.healthValue.classList.toggle('low', state.health <= 25);
   els.healthValue.classList.toggle('godmode', !!state.godmode);
 
-  if (state.mode === 'tdm') {
+  if (state.mode === 'tdm' || state.mode === 'ctf') {
     targetRedScore = state.scoreboard.red;
     targetBlueScore = state.scoreboard.blue;
     animateScores();
@@ -95,11 +114,45 @@ export function update(state) {
     if (els.reloadBar) {
       els.reloadBar.classList.toggle('active', !!state.reloading && !state.noReload);
     }
+    if (els.gunGameProgress) {
+      if (state.mode === 'gungame') {
+        els.gunGameProgress.textContent = `GUN ${(state.gunGameIndex || 0) + 1}/5`;
+      } else {
+        els.gunGameProgress.textContent = '';
+      }
+    }
   }
 
   if (els.regenIndicator) {
     const showRegen = state.alive && state.health < 100 && state.regenerating;
     els.regenIndicator.classList.toggle('hidden', !showRegen);
+  }
+
+  // flag HUD (only in CTF, only while alive or carrying)
+  if (els.flagHud && state.mode === 'ctf') {
+    const me = state.players.get(state.myId);
+    if (me && me.carryingFlag) {
+      els.flagHud.classList.remove('hidden');
+      els.flagStatus.textContent = `CARRYING ${me.carryingFlag.toUpperCase()} FLAG`;
+      els.flagStatus.className = `carrying-${me.carryingFlag}`;
+    } else {
+      els.flagHud.classList.add('hidden');
+    }
+  } else if (els.flagHud) {
+    els.flagHud.classList.add('hidden');
+  }
+
+  // spectator HUD
+  if (els.spectatorHud && !state.alive && state.spectatorTargetId) {
+    const target = state.players.get(state.spectatorTargetId);
+    if (target) {
+      els.spectatorHud.classList.remove('hidden');
+      els.spectatorTarget.textContent = target.name;
+    } else {
+      els.spectatorHud.classList.add('hidden');
+    }
+  } else if (els.spectatorHud) {
+    els.spectatorHud.classList.add('hidden');
   }
 
   if (scoreboardVisible) updateScoreboard(state);
@@ -210,6 +263,33 @@ export function showAnnouncement(text, from) {
   }, 5000);
 }
 
+export function showFlagEvent(text) {
+  if (!els.flagHud) return;
+  const div = document.createElement('div');
+  div.className = 'kill-banner';
+  div.style.top = '48%';
+  div.textContent = text;
+  els.hud.appendChild(div);
+  setTimeout(() => div.remove(), 2000);
+}
+
+export function showKillcam(killerName) {
+  if (!els.killcam) return;
+  els.killcamName.textContent = killerName || '—';
+  els.killcam.classList.remove('hidden');
+  clearTimeout(killcamTimeout);
+  killcamTimeout = setTimeout(() => {
+    els.killcam.classList.add('hidden');
+  }, 2200);
+}
+
+export function hideKillcam() {
+  if (!els.killcam) return;
+  els.killcam.classList.add('hidden');
+  clearTimeout(killcamTimeout);
+  killcamTimeout = null;
+}
+
 export function showDeath(killerName, respawnMs) {
   if (!els.deathOverlay) return;
   els.deathOverlay.classList.remove('hidden');
@@ -267,7 +347,9 @@ export function showEndScreen(state) {
   const { winner, players, myId, endReason } = state;
 
   let title = 'MATCH OVER';
-  let subtitle = endReason === 'limit' ? 'Kill limit reached' : 'Time expired';
+  let subtitle = endReason === 'limit' ? 'Kill limit reached'
+               : endReason === 'captures' ? 'Capture limit reached'
+               : 'Time expired';
 
   if (winner === 'tie') {
     title = 'DRAW';
@@ -348,9 +430,10 @@ function updateScoreboard(state) {
     return a.deaths - b.deaths;
   });
 
-  if (state.mode === 'tdm') {
+  els.tabMode.textContent = MODE_NAMES[state.mode] || 'DEATHMATCH';
+
+  if (state.mode === 'tdm' || state.mode === 'ctf') {
     els.tabScoreboard.classList.remove('ffa');
-    els.tabMode.textContent = 'TEAM DEATHMATCH';
     els.tabRedScore.textContent = state.scoreboard.red;
     els.tabBlueScore.textContent = state.scoreboard.blue;
 
@@ -358,7 +441,6 @@ function updateScoreboard(state) {
     renderColumn(els.tabBlue, players.filter(p => p.team === 'blue'), state);
   } else {
     els.tabScoreboard.classList.add('ffa');
-    els.tabMode.textContent = 'DEATHMATCH';
     renderColumn(els.tabFFA, players, state);
   }
 }
