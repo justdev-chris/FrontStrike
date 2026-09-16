@@ -13,6 +13,7 @@
     <div id="crosshair"></div>
 
     <div id="nameTagLayer"></div>
+    <div id="damageNumberLayer"></div>
 
     <div id="regenIndicator" class="hidden">
       <span class="regen-icon">+</span>
@@ -31,6 +32,7 @@
         <span id="ammoReserve">∞</span>
       </div>
       <div id="reloadBar"></div>
+      <div id="gunGameProgress"></div>
     </div>
     <div id="emoteIndicator" class="hidden"></div>
     <div id="streakBanner" class="hidden"></div>
@@ -44,6 +46,16 @@
     <div id="scoreboard">
       <div id="scoreLine"></div>
       <div id="timer"></div>
+    </div>
+
+    <div id="flagHud" class="hidden">
+      <div id="flagStatus"></div>
+    </div>
+
+    <div id="spectatorHud" class="hidden">
+      <div class="spectator-label">SPECTATING</div>
+      <div id="spectatorTarget" class="spectator-name">—</div>
+      <div class="spectator-hint">Left click / Right click to cycle</div>
     </div>
 
     <div id="tabScoreboard" class="hidden">
@@ -85,6 +97,14 @@
     <div class="death-title">ELIMINATED</div>
     <div id="deathKiller"></div>
     <div id="deathTimer">3.0s</div>
+  </div>
+
+  <div id="killcam" class="hidden">
+    <div class="killcam-overlay"></div>
+    <div class="killcam-content">
+      <div class="killcam-kicker">KILLED BY</div>
+      <div id="killcamName" class="killcam-name">—</div>
+    </div>
   </div>
 
   <div id="endScreen" class="hidden">
