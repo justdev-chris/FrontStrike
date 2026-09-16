@@ -24,6 +24,8 @@ export function handleConnection(ws) {
   ws.on('close', () => {
     const p = findBySocket(ws);
     if (!p) return;
+    if (game.getState().phase === 'vote') game.releaseVotes(p);
+    dropCarriedFlag(p);
     players.remove(p.id);
     broadcast({ type: S2C.PLAYER_LEFT, id: p.id });
   });
@@ -45,7 +47,7 @@ function route(ws, msg) {
     case C2S.ADMIN_ACTION: return admin.handleAdminAction(p, msg);
     case C2S.SPECTATE:     return onSpectate(p, msg);
     case C2S.SET_NAME:
-      p.name = String(msg.name || '').slice(0, 20);
+      players.rename(p, msg.name);
       return;
   }
 }
@@ -82,13 +84,13 @@ function onInput(p, msg) {
     if (moving) players.clearEmote(p);
   }
 
-  p.input.forward = clamp(msg.forward, -1, 1);
-  p.input.right   = clamp(msg.right, -1, 1);
+  p.input.forward = clamp(safeNumber(msg.forward, 0), -1, 1);
+  p.input.right   = clamp(safeNumber(msg.right, 0), -1, 1);
   p.input.jump    = !!msg.jump;
   p.input.sprint  = !!msg.sprint;
   p.input.crouch  = !!msg.crouch;
-  p.yaw   = msg.yaw;
-  p.pitch = clamp(msg.pitch, -1.5, 1.5);
+  p.yaw   = safeNumber(msg.yaw, p.yaw);
+  p.pitch = clamp(safeNumber(msg.pitch, 0), -1.5, 1.5);
   p.lastInputSeq = msg.seq;
   p.aiming = !!msg.aiming;
 
@@ -99,8 +101,14 @@ function onInput(p, msg) {
     } else {
       const w = getWeapon(msg.weaponId);
       if (w && (!w.adminOnly || p.isAdmin)) {
+        // Remember how much ammo was left in the weapon we're leaving so
+        // swapping away and back isn't a free reload.
+        p.ammoByWeapon[p.weaponId] = p.magAmmo;
+
         p.weaponId = w.id;
-        p.magAmmo = w.magSize;
+        p.magAmmo = p.ammoByWeapon[w.id] !== undefined
+          ? p.ammoByWeapon[w.id]
+          : w.magSize;
         p.reloading = false;
         p.reloadEndsAt = 0;
         if (p.emote) players.clearEmote(p);
@@ -240,13 +248,13 @@ function onEmote(p, msg) {
 
 function onVoteMode(p, msg) {
   if (game.getState().phase !== 'vote') return;
-  game.castModeVote(msg.mode);
+  game.castModeVote(p, msg.mode);
   broadcastVoteState();
 }
 
 function onVoteMap(p, msg) {
   if (game.getState().phase !== 'vote') return;
-  game.castMapVote(msg.mapId);
+  game.castMapVote(p, msg.mapId);
   broadcastVoteState();
 }
 
@@ -405,6 +413,14 @@ export function broadcastMatchState() {
   });
 }
 
+function dropCarriedFlag(p) {
+  const flags = game.getState().flags;
+  if (!flags || !p.carryingFlag) return;
+  const flag = flags[p.carryingFlag];
+  if (flag && flag.carriedBy === p.id) flag.carriedBy = null;
+  p.carryingFlag = null;
+}
+
 function findBySocket(ws) {
   for (const p of players.getAll().values()) {
     if (p.ws === ws) return p;
@@ -414,4 +430,10 @@ function findBySocket(ws) {
 
 function clamp(v, a, b) {
   return Math.max(a, Math.min(b, v));
+}
+
+// Guards against NaN/Infinity/garbage from a malformed or malicious client
+// message poisoning a player's position and getting broadcast to everyone.
+function safeNumber(v, fallback) {
+  return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
 }

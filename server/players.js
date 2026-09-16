@@ -20,7 +20,7 @@ export function create(ws, name) {
   const id = nextId++;
   const state = game.getState();
 
-  const cleanName = sanitizeName(name) || `Player${id}`;
+  const cleanName = uniqueName(sanitizeName(name) || `Player${id}`);
   const isAdmin = cleanName === ADMIN.NAME;
   const team = game.isTeamMode() ? pickTeam() : 'ffa';
   const spawn = pickSpawn(team);
@@ -64,6 +64,7 @@ export function create(ws, name) {
 
     weaponId: startWeapon.id,
     magAmmo: startWeapon.magSize,
+    ammoByWeapon: {},
     reloading: false,
     reloadEndsAt: 0,
     aiming: false,
@@ -86,6 +87,9 @@ export function create(ws, name) {
 
     spectating: null,
     carryingFlag: null,
+
+    votedMode: null,
+    votedMap: null,
   };
 
   players.set(id, player);
@@ -143,6 +147,7 @@ export function respawn(p) {
   p.alive = true;
   p.onGround = true;
   p.inputHistory = [];
+  p.ammoByWeapon = {}; // fresh life, fresh ammo for every weapon
 
   // in gun game, respawn with current progress weapon
   if (game.getState().mode === 'gungame') {
@@ -227,4 +232,30 @@ export function advanceGunGame(p) {
 function sanitizeName(name) {
   if (typeof name !== 'string') return '';
   return name.trim().slice(0, 20);
+}
+
+// Ensures `base` doesn't collide (case-insensitively) with any currently
+// connected player. Names free up automatically once their owner leaves,
+// since we only ever check against the live player list.
+export function uniqueName(base, excludeId = null) {
+  const taken = new Set();
+  for (const p of players.values()) {
+    if (p.id === excludeId) continue;
+    taken.add(p.name.toLowerCase());
+  }
+  if (!taken.has(base.toLowerCase())) return base;
+
+  let i = 2;
+  let candidate = `${base} (${i})`;
+  while (taken.has(candidate.toLowerCase())) {
+    i++;
+    candidate = `${base} (${i})`;
+  }
+  return candidate;
+}
+
+export function rename(p, name) {
+  const clean = sanitizeName(name);
+  if (!clean) return;
+  p.name = uniqueName(clean, p.id);
 }

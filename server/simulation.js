@@ -11,6 +11,12 @@ const HEALTH_PACK_RADIUS = 1.2;
 const HEALTH_PACK_AMOUNT = 40;
 const HEALTH_PACK_RESPAWN_MS = 12000;
 
+const FLAG_PICKUP_RADIUS = 1.2;
+const FLAG_RETURN_RADIUS = 1.2;
+const FLAG_CAPTURE_RADIUS = 1.5;
+const FLAG_HOME_EPSILON = 0.5;
+const FLAG_CARRY_Y_OFFSET = 1.5;
+
 const expandedCache = new Map();
 
 function getSolids(map) {
@@ -35,6 +41,7 @@ export function tick() {
   }
 
   tickHealthPacks(state, now);
+  tickFlags(state, now);
 }
 
 function tickSlide(p, now) {
@@ -200,5 +207,117 @@ function broadcastHealthPack(hp) {
         active: hp.active,
       },
     });
+  }).catch(() => {});
+}
+
+function dist2(ax, ay, az, bx, by, bz) {
+  const dx = ax - bx, dy = ay - by, dz = az - bz;
+  return dx * dx + dy * dy + dz * dz;
+}
+
+function tickFlags(state, now) {
+  if (!state.flags) return;
+  if (state.mode !== 'ctf') return;
+
+  const flags = [state.flags.red, state.flags.blue];
+
+  for (const flag of flags) {
+    if (flag.carriedBy != null) {
+      const carrier = players.get(flag.carriedBy);
+      // Carrier disconnected without a clean drop (e.g. mid-tick) — drop it
+      // where it is rather than leaving it glued to a ghost player.
+      if (!carrier || !carrier.alive) {
+        flag.carriedBy = null;
+        if (carrier) carrier.carryingFlag = null;
+        continue;
+      }
+      flag.x = carrier.x;
+      flag.y = carrier.y + FLAG_CARRY_Y_OFFSET;
+      flag.z = carrier.z;
+    }
+  }
+
+  // Capture check: an alive player carrying an enemy flag who reaches their
+  // own team's flag stand scores, but only if their own flag is home
+  // (standard "flag must be home to cap" CTF rule).
+  for (const p of players.getAll().values()) {
+    if (!p.alive || !p.carryingFlag) continue;
+
+    const ownFlag = state.flags[p.team];
+    if (!ownFlag) continue;
+
+    const ownFlagHome = !ownFlag.carriedBy &&
+      dist2(ownFlag.x, ownFlag.y, ownFlag.z, ownFlag.homeX, ownFlag.homeY, ownFlag.homeZ) <
+        FLAG_HOME_EPSILON * FLAG_HOME_EPSILON;
+
+    if (!ownFlagHome) continue;
+
+    const d2 = dist2(p.x, p.y, p.z, ownFlag.homeX, ownFlag.homeY, ownFlag.homeZ);
+    if (d2 > FLAG_CAPTURE_RADIUS * FLAG_CAPTURE_RADIUS) continue;
+
+    const capturedFlag = state.flags[p.carryingFlag];
+    if (!capturedFlag) continue;
+
+    capturedFlag.carriedBy = null;
+    capturedFlag.x = capturedFlag.homeX;
+    capturedFlag.y = capturedFlag.homeY;
+    capturedFlag.z = capturedFlag.homeZ;
+    p.carryingFlag = null;
+
+    game.addTeamScore(p.team, 1);
+
+    broadcastFlagEvent({ event: 'capture', playerId: p.id, flagTeam: capturedFlag.id });
+
+    if (game.checkKillLimit(p)) {
+      game.endMatch('captures');
+      import('./network.js').then(net => net.broadcastMatchState()).catch(() => {});
+    }
+  }
+
+  // Pickup / return check for each flag not currently carried.
+  for (const flag of flags) {
+    if (flag.carriedBy != null) continue;
+
+    const atHome = dist2(flag.x, flag.y, flag.z, flag.homeX, flag.homeY, flag.homeZ) <
+      FLAG_HOME_EPSILON * FLAG_HOME_EPSILON;
+
+    let handled = false;
+
+    for (const p of players.getAll().values()) {
+      if (!p.alive) continue;
+
+      if (p.team === flag.team) {
+        // Own team returns a strayed flag by touching it.
+        if (atHome) continue;
+        const d2 = dist2(p.x, p.y, p.z, flag.x, flag.y, flag.z);
+        if (d2 > FLAG_RETURN_RADIUS * FLAG_RETURN_RADIUS) continue;
+
+        flag.x = flag.homeX;
+        flag.y = flag.homeY;
+        flag.z = flag.homeZ;
+        broadcastFlagEvent({ event: 'return', playerId: p.id, flagTeam: flag.id });
+        handled = true;
+        break;
+      }
+
+      // Enemy team can pick it up, whether it's home or dropped in the field.
+      if (p.carryingFlag) continue; // already holding a flag
+      const d2 = dist2(p.x, p.y, p.z, flag.x, flag.y, flag.z);
+      if (d2 > FLAG_PICKUP_RADIUS * FLAG_PICKUP_RADIUS) continue;
+
+      flag.carriedBy = p.id;
+      p.carryingFlag = flag.id;
+      broadcastFlagEvent({ event: 'pickup', playerId: p.id, flagTeam: flag.id });
+      handled = true;
+      break;
+    }
+
+    if (handled) continue;
+  }
+}
+
+function broadcastFlagEvent(payload) {
+  import('./network.js').then(net => {
+    net.broadcast({ type: 'flagEvent', ...payload });
   }).catch(() => {});
 }

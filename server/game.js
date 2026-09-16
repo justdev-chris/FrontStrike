@@ -183,14 +183,39 @@ export function checkKillLimit(killer) {
   return false;
 }
 
-export function castModeVote(mode) {
+// One vote per connected player. Casting again just moves their vote
+// instead of stacking another one on top of it.
+export function castModeVote(p, mode) {
   if (!state.modeVotes.hasOwnProperty(mode)) return;
+  if (p.votedMode === mode) return;
+  if (p.votedMode && state.modeVotes.hasOwnProperty(p.votedMode)) {
+    state.modeVotes[p.votedMode] = Math.max(0, state.modeVotes[p.votedMode] - 1);
+  }
   state.modeVotes[mode]++;
+  p.votedMode = mode;
 }
 
-export function castMapVote(mapId) {
+export function castMapVote(p, mapId) {
   if (!MAPS[mapId]) return;
+  if (p.votedMap === mapId) return;
+  if (p.votedMap && state.mapVotes[p.votedMap]) {
+    state.mapVotes[p.votedMap] = Math.max(0, state.mapVotes[p.votedMap] - 1);
+  }
   state.mapVotes[mapId] = (state.mapVotes[mapId] || 0) + 1;
+  p.votedMap = mapId;
+}
+
+// Called when a player disconnects mid-vote so their vote doesn't linger
+// and keep swaying the outcome after they're gone.
+export function releaseVotes(p) {
+  if (p.votedMode && state.modeVotes.hasOwnProperty(p.votedMode)) {
+    state.modeVotes[p.votedMode] = Math.max(0, state.modeVotes[p.votedMode] - 1);
+  }
+  if (p.votedMap && state.mapVotes[p.votedMap]) {
+    state.mapVotes[p.votedMap] = Math.max(0, state.mapVotes[p.votedMap] - 1);
+  }
+  p.votedMode = null;
+  p.votedMap = null;
 }
 
 export function tallyModeVotes() {
@@ -233,4 +258,8 @@ export function resetVotes() {
   state.modeVotes.gungame = 0;
   state.modeVotes.ctf = 0;
   state.mapVotes = {};
+  for (const p of state.players.values()) {
+    p.votedMode = null;
+    p.votedMap = null;
+  }
 }
