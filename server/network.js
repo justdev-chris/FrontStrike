@@ -1,6 +1,7 @@
 import {
   C2S, S2C, EMOTES,
   publicPlayer, publicMap, publicHealthPack, publicProjectile,
+  publicPlatform, publicFlag,
 } from '../shared/protocol.js';
 import { NET } from '../shared/constants.js';
 import { MAPS } from '../shared/map.js';
@@ -42,6 +43,7 @@ function route(ws, msg) {
     case C2S.RESPAWN:      return onRespawn(p);
     case C2S.EMOTE:        return onEmote(p, msg);
     case C2S.ADMIN_ACTION: return admin.handleAdminAction(p, msg);
+    case C2S.SPECTATE:     return onSpectate(p, msg);
     case C2S.SET_NAME:
       p.name = String(msg.name || '').slice(0, 20);
       return;
@@ -91,13 +93,18 @@ function onInput(p, msg) {
   p.aiming = !!msg.aiming;
 
   if (msg.weaponId && msg.weaponId !== p.weaponId) {
-    const w = getWeapon(msg.weaponId);
-    if (w && (!w.adminOnly || p.isAdmin)) {
-      p.weaponId = w.id;
-      p.magAmmo = w.magSize;
-      p.reloading = false;
-      p.reloadEndsAt = 0;
-      if (p.emote) players.clearEmote(p);
+    // in gun game, only progression weapons are allowed
+    if (game.getState().mode === 'gungame') {
+      // ignore switch requests — gun game controls the weapon
+    } else {
+      const w = getWeapon(msg.weaponId);
+      if (w && (!w.adminOnly || p.isAdmin)) {
+        p.weaponId = w.id;
+        p.magAmmo = w.magSize;
+        p.reloading = false;
+        p.reloadEndsAt = 0;
+        if (p.emote) players.clearEmote(p);
+      }
     }
   }
 
@@ -144,20 +151,45 @@ function onShoot(p, msg) {
         health: h.health,
         attacker: p.id,
       });
-    }
-  }
 
-  if (result.hits) {
-    for (const h of result.hits) {
+      // damage numbers to shooter only
+      send(p.ws, {
+        type: S2C.DAMAGE_NUMBER,
+        victimId: h.victimId,
+        amount: h.damage,
+        point: h.point,
+      });
+
+      if (!h.killed) continue;
+
+      broadcast({ type: S2C.DEATH, victim: h.victimId, killer: p.id });
+      broadcast({
+        type: S2C.KILLFEED,
+        killer: p.id,
+        victim: h.victimId,
+        weapon: p.weaponId,
+      });
+
+      // killcam to victim
       const victim = players.get(h.victimId);
-      if (!victim) continue;
-      if (!victim.alive) {
-        broadcast({ type: S2C.DEATH, victim: victim.id, killer: p.id });
-        broadcast({
-          type: S2C.KILLFEED,
-          killer: p.id,
-          victim: victim.id,
-          weapon: p.weaponId,
+      if (victim) {
+        send(victim.ws, {
+          type: S2C.KILLCAM,
+          killerId: p.id,
+          killerName: p.name,
+          killerX: p.x,
+          killerY: p.y,
+          killerZ: p.z,
+          killerYaw: p.yaw,
+          killerPitch: p.pitch,
+        });
+      }
+
+      // gun game advance notification
+      if (h.gunGameAdvanced) {
+        send(p.ws, {
+          type: 'weaponGiven',
+          weaponId: p.weaponId,
         });
       }
     }
@@ -174,7 +206,7 @@ function onShoot(p, msg) {
   }
 
   if (result.hitLimit) {
-    game.endMatch('limit');
+    game.endMatch(game.getState().mode === 'ctf' ? 'captures' : 'limit');
     broadcastMatchState();
   }
 }
@@ -222,6 +254,10 @@ function onRespawn(p) {
   if (p.alive) return;
   players.respawn(p);
   broadcast({ type: S2C.RESPAWN, player: publicPlayer(p) });
+}
+
+function onSpectate(p, msg) {
+  p.spectating = msg.targetId || null;
 }
 
 export function startLoop() {
@@ -287,6 +323,17 @@ export function startLoop() {
               victim: victim.id,
               weapon: 'rpg',
             });
+
+            send(victim.ws, {
+              type: S2C.KILLCAM,
+              killerId: killer.id,
+              killerName: killer.name,
+              killerX: killer.x,
+              killerY: killer.y,
+              killerZ: killer.z,
+              killerYaw: killer.yaw,
+              killerPitch: killer.pitch,
+            });
           }
         }
       }
@@ -308,6 +355,10 @@ export function startLoop() {
         })),
         healthPacks: (s.healthPacks || []).map(publicHealthPack),
         projectiles: [...projectiles.getAll().values()].map(publicProjectile),
+        platforms: (s.platforms || []).map(publicPlatform),
+        flags: s.flags
+          ? [publicFlag(s.flags.red), publicFlag(s.flags.blue)]
+          : null,
       });
     }
   }, 1000 / NET.TICK_RATE);
