@@ -80,7 +80,8 @@ canvas#game {
   transform: translateY(-50%);
 }
 
-#nameTagLayer {
+#nameTagLayer,
+#damageNumberLayer {
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -107,6 +108,34 @@ canvas#game {
 .name-tag.self        { display: none; }
 .name-tag.admin       { border-color: rgba(80, 255, 140, 0.8); color: var(--accent); }
 .name-tag.dead        { opacity: 0; }
+
+.damage-number {
+  position: absolute;
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 0 8px rgba(0, 0, 0, 0.9), 0 0 16px rgba(255, 255, 255, 0.5);
+  pointer-events: none;
+  animation: damageFloat 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  white-space: nowrap;
+}
+
+.damage-number.headshot {
+  color: var(--gold);
+  text-shadow: 0 0 8px rgba(0, 0, 0, 0.9), 0 0 20px rgba(255, 204, 85, 0.8);
+}
+
+.damage-number.kill {
+  color: var(--accent);
+  font-size: 26px;
+}
+
+@keyframes damageFloat {
+  0%   { opacity: 0; transform: translate(-50%, -50%) translateY(0) scale(0.7); }
+  15%  { opacity: 1; transform: translate(-50%, -50%) translateY(-8px) scale(1.1); }
+  70%  { opacity: 1; transform: translate(-50%, -50%) translateY(-40px) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) translateY(-70px) scale(0.9); }
+}
 
 #regenIndicator {
   position: absolute;
@@ -217,6 +246,45 @@ canvas#game {
 @keyframes reloadPulse {
   0%, 100% { transform: translateX(-100%); }
   50%      { transform: translateX(0); }
+}
+
+#gunGameProgress {
+  position: absolute;
+  right: 40px;
+  bottom: 4px;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+}
+
+#flagHud {
+  position: absolute;
+  top: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  pointer-events: none;
+}
+
+#flagStatus {
+  display: inline-block;
+  padding: 6px 18px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  font-size: 12px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+}
+
+#flagStatus.carrying-red {
+  border-color: rgba(227, 51, 85, 0.6);
+  color: var(--red);
+}
+
+#flagStatus.carrying-blue {
+  border-color: rgba(68, 170, 255, 0.6);
+  color: var(--blue);
 }
 
 #emoteIndicator {
@@ -394,6 +462,39 @@ canvas#game {
   margin-top: 2px;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.2em;
+}
+
+#spectatorHud {
+  position: absolute;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  pointer-events: none;
+}
+
+.spectator-label {
+  font-size: 10px;
+  letter-spacing: 0.4em;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.spectator-name {
+  font-size: 22px;
+  font-weight: 300;
+  letter-spacing: 0.2em;
+  color: var(--accent);
+  text-shadow: 0 0 20px rgba(80, 255, 140, 0.5);
+}
+
+.spectator-hint {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  margin-top: 8px;
 }
 
 #hud .kill-banner {
@@ -578,12 +679,63 @@ canvas#game {
   letter-spacing: 0.1em;
 }
 
+#killcam {
+  position: fixed;
+  inset: 0;
+  z-index: 16;
+  pointer-events: none;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 80px;
+  animation: killcamIn 0.4s ease-out;
+}
+
+.killcam-overlay {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at center,
+      transparent 40%,
+      rgba(0, 0, 0, 0.5) 100%),
+    linear-gradient(180deg,
+      rgba(20, 0, 0, 0.25) 0%,
+      rgba(0, 0, 0, 0.4) 100%);
+  pointer-events: none;
+}
+
+.killcam-content {
+  position: relative;
+  text-align: center;
+}
+
+.killcam-kicker {
+  font-size: 11px;
+  letter-spacing: 0.5em;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.killcam-name {
+  font-size: 28px;
+  font-weight: 300;
+  letter-spacing: 0.3em;
+  color: var(--red);
+  text-shadow: 0 0 24px rgba(230, 50, 80, 0.6);
+}
+
+@keyframes killcamIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
 #announcement {
   position: fixed;
   top: 96px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 16;
+  z-index: 17;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -776,7 +928,7 @@ canvas#game {
   width: 340px;
   max-height: calc(100vh - 48px);
   overflow-y: auto;
-  z-index: 17;
+  z-index: 19;
   background: rgba(6, 8, 10, 0.9);
   backdrop-filter: blur(20px) saturate(0.6);
   -webkit-backdrop-filter: blur(20px) saturate(0.6);
