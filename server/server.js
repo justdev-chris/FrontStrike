@@ -55,7 +55,7 @@ setInterval(() => {
         game.setMode(mode);
         game.setMap(mapId);
 
-        if (mode === 'tdm') reassignTeamsAndRespawn();
+        if (game.isTeamMode()) reassignTeamsAndRespawn();
         else respawnAll();
 
         game.startMatch(now);
