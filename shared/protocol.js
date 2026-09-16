@@ -8,6 +8,7 @@ export const C2S = {
   SET_NAME: 'setName',
   EMOTE: 'emote',
   ADMIN_ACTION: 'adminAction',
+  SPECTATE: 'spectate',
 };
 
 export const S2C = {
@@ -32,6 +33,11 @@ export const S2C = {
   ANNOUNCE: 'announce',
   ADMIN_RESULT: 'adminResult',
   AFFECTED: 'affected',
+  KILLCAM: 'killcam',
+  DAMAGE_NUMBER: 'damageNumber',
+  PLATFORM_UPDATE: 'platformUpdate',
+  FLAG_UPDATE: 'flagUpdate',
+  FLAG_EVENT: 'flagEvent',
 };
 
 export const EMOTES = {
@@ -66,6 +72,28 @@ export const ADMIN_ACTIONS = {
   SET_NORELOAD: 'setNoReload',
 };
 
+export const GAME_MODES = {
+  DM: 'dm',
+  TDM: 'tdm',
+  GUN_GAME: 'gungame',
+  CTF: 'ctf',
+};
+
+export const MODE_NAMES = {
+  dm: 'Deathmatch',
+  tdm: 'Team Deathmatch',
+  gungame: 'Gun Game',
+  ctf: 'Capture the Flag',
+};
+
+export const GUN_GAME_ORDER = [
+  'pistol',
+  'smg',
+  'shotgun',
+  'rifle',
+  'sniper',
+];
+
 export function publicPlayer(p) {
   return {
     id: p.id,
@@ -87,6 +115,9 @@ export function publicPlayer(p) {
     godmode: !!p.godmode,
     speedMult: p.speedMult || 1,
     noReload: !!p.noReload,
+    gunGameIndex: p.gunGameIndex || 0,
+    spectating: p.spectating || null,
+    carryingFlag: p.carryingFlag || null,
   };
 }
 
@@ -97,6 +128,9 @@ export function publicMap(map) {
     mapSize: map.mapSize,
     obstacles: map.obstacles,
     healthPacks: map.healthPacks || [],
+    jumpPads: map.jumpPads || [],
+    movingPlatforms: map.movingPlatforms || [],
+    flags: map.flags || null,
   };
 }
 
@@ -117,5 +151,24 @@ export function publicProjectile(pr) {
     weaponId: pr.weaponId,
     x: pr.x, y: pr.y, z: pr.z,
     vx: pr.vx, vy: pr.vy, vz: pr.vz,
+  };
+}
+
+export function publicPlatform(pl) {
+  return {
+    id: pl.id,
+    x: pl.x, y: pl.y, z: pl.z,
+  };
+}
+
+export function publicFlag(f) {
+  return {
+    id: f.id,
+    team: f.team,
+    x: f.x, y: f.y, z: f.z,
+    carriedBy: f.carriedBy || null,
+    homeX: f.homeX,
+    homeY: f.homeY,
+    homeZ: f.homeZ,
   };
 }
