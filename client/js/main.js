@@ -372,6 +372,9 @@ export function onMessage(msg) {
       } else if (msg.event === 'capture') {
         const p = state.players.get(msg.playerId);
         hud.showFlagEvent(`${p ? p.name : 'someone'} captured the flag!`);
+      } else if (msg.event === 'return') {
+        const p = state.players.get(msg.playerId);
+        hud.showFlagEvent(`${p ? p.name : 'someone'} returned the ${msg.flagTeam} flag`);
       }
       break;
     }

@@ -33,6 +33,7 @@ const local = {
 
   weaponId: 'rifle',
   magAmmo: 30,
+  ammoByWeapon: {},
   reloading: false,
   reloadEndsAt: 0,
   aiming: false,
@@ -93,6 +94,7 @@ export function spawn(playerData) {
 
   const w = getWeapon(local.weaponId);
   local.magAmmo = w.magSize;
+  local.ammoByWeapon = {}; // fresh life, fresh ammo for every weapon
   local.reloading = false;
   local.aiming = false;
   local.recoilPitch = 0;
@@ -278,8 +280,14 @@ function switchWeapon(slotId) {
   // in gun game, weapons are controlled by progression
   if (state.mode === 'gungame') return;
 
+  // Remember what was left in the weapon we're leaving so swapping away
+  // and back isn't a free reload (matches server-authoritative behavior).
+  local.ammoByWeapon[local.weaponId] = local.magAmmo;
+
   local.weaponId = slotId;
-  local.magAmmo = w.magSize;
+  local.magAmmo = local.ammoByWeapon[slotId] !== undefined
+    ? local.ammoByWeapon[slotId]
+    : w.magSize;
   local.reloading = false;
   local.aiming = false;
   local.recoilPitch = 0;
