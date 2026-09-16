@@ -2,14 +2,7 @@
 // Solid types:
 //   box    { type:'box',    x, y, z, w, h, d }
 //   ramp   { type:'ramp',   x, y, z, w, h, d, axis:'x'|'z', dir:1|-1 }
-//          - y is the LOWEST corner of the ramp
-//          - h is the height gain across the full run
-//          - axis is the direction of the slope
-//          - dir = +1 means height increases toward +axis
-//          - dir = -1 means height increases toward -axis
-//          - the ramp's footprint is w x d, centered at (x, z)
 //   stairs { type:'stairs', x, y, z, w, h, d, axis:'x'|'z', dir:1|-1, steps:N }
-//          - expanded into N stacked boxes at load time by expandStairs()
 
 export const STEP_UP = 0.35;
 export const GRAVITY_SNAP = 0.5;
@@ -61,10 +54,6 @@ export function groundHeightAt(x, z, feetY, solids) {
   return best;
 }
 
-// Move a capsule (radius r, height h, centered at y = centerY) by delta,
-// resolving collisions against all solids. `wasGrounded` should be the
-// value of onGround from the previous tick — it enables snap-down to the
-// ground only when the player is actually walking, not while airborne.
 export function moveAndCollide(state, dx, dy, dz, radius, height, solids, wasGrounded = false) {
   let { x, y, z, vy } = state;
 
@@ -98,8 +87,6 @@ export function moveAndCollide(state, dx, dy, dz, radius, height, solids, wasGro
       y = groundY + height / 2;
       onGround = true;
     } else if (wasGrounded && feet - groundY < GRAVITY_SNAP && dy <= 0) {
-      // snap-down only when the player was already grounded on the previous
-      // tick. Free-falling must never be snapped mid-air.
       y = groundY + height / 2;
       onGround = true;
     }
@@ -132,7 +119,14 @@ function collides(x, y, z, radius, height, solids) {
     if (s.type === 'ramp') {
       if (!insideFootprint(x, z, s)) continue;
       const surfaceY = rampHeightAt(x, z, s);
-      if (feet < surfaceY && feet + height > surfaceY) return true;
+      // Only treat the ramp as a side-blocker if the player's body is
+      // genuinely entering from below. If the feet are within one step-up
+      // of the surface, we're walking on top — the ground check handles
+      // support and the slope shouldn't block horizontal motion.
+      if (feet < surfaceY && head > surfaceY) {
+        if (feet > surfaceY - STEP_UP) continue;
+        return true;
+      }
       continue;
     }
 
