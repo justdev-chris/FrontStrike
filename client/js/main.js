@@ -15,6 +15,7 @@ import * as nameTags from './game/nameTags.js';
 import * as hud from './ui/hud.js';
 import * as menu from './ui/menu.js';
 import * as admin from './ui/admin.js';
+import * as damageNumbers from './ui/damageNumbers.js';
 
 import { PLAYER } from '/shared/constants.js';
 
@@ -49,6 +50,8 @@ export const state = {
 
   healthPacks: [],
   projectiles: [],
+  platforms: [],
+  flags: null,
 
   regenerating: false,
   lastDamageAt: 0,
@@ -56,6 +59,12 @@ export const state = {
   godmode: false,
   speedMult: 1,
   noReload: false,
+
+  gunGameIndex: 0,
+  gunGameMax: 0,
+
+  killcam: null,
+  spectatorTargetId: null,
 };
 
 let suppressPause = false;
@@ -227,6 +236,16 @@ export function onMessage(msg) {
         projectiles.syncFromSnapshot(msg.projectiles);
       }
 
+      if (msg.platforms) {
+        state.platforms = msg.platforms;
+        mapBuilder.updatePlatforms(msg.platforms);
+      }
+
+      if (msg.flags) {
+        state.flags = msg.flags;
+        mapBuilder.updateFlags(msg.flags);
+      }
+
       const me = msg.players.find(p => p.id === state.myId);
       const ackedSeq = me ? me.ackedSeq : undefined;
 
@@ -289,6 +308,10 @@ export function onMessage(msg) {
       hud.update(state);
       break;
 
+    case 'damageNumber':
+      damageNumbers.spawn(msg.point, msg.amount);
+      break;
+
     case 'death': {
       if (msg.victim === state.myId) {
         localPlayer.onDeath();
@@ -305,16 +328,30 @@ export function onMessage(msg) {
       break;
     }
 
+    case 'killcam': {
+      if (msg.victim === state.myId || msg.killerName) {
+        hud.showKillcam(msg.killerName);
+      }
+      break;
+    }
+
     case 'respawn':
       if (msg.player.id === state.myId) {
         localPlayer.onRespawn(msg.player);
         hud.hideDeath();
+        hud.hideKillcam();
         state.lastDamageAt = 0;
         state.regenerating = false;
+        state.killcam = null;
       } else {
         remotePlayers.onRespawn(msg.player);
       }
       break;
+
+    case 'weaponGiven': {
+      localPlayer.forceWeapon(msg.weaponId);
+      break;
+    }
 
     case 'killfeed':
       hud.addKillfeed(msg.killer, msg.victim, msg.weapon, state.players);
@@ -327,6 +364,17 @@ export function onMessage(msg) {
     case 'announce':
       hud.showAnnouncement(msg.text, msg.from);
       break;
+
+    case 'flagEvent': {
+      if (msg.event === 'pickup') {
+        const p = state.players.get(msg.playerId);
+        hud.showFlagEvent(`${p ? p.name : 'someone'} picked up the ${msg.flagTeam} flag`);
+      } else if (msg.event === 'capture') {
+        const p = state.players.get(msg.playerId);
+        hud.showFlagEvent(`${p ? p.name : 'someone'} captured the flag!`);
+      }
+      break;
+    }
 
     case 'adminResult':
       if (msg.action === 'kicked') {
@@ -372,7 +420,6 @@ function handleMatchState(msg) {
   if (msg.endReason !== undefined) state.endReason = msg.endReason;
 
   if (msg.phase === 'vote') {
-    // hide end screen when voting starts
     hud.hideEndScreen();
     menu.showVote(msg);
     input.unlock();
@@ -384,11 +431,13 @@ function handleMatchState(msg) {
     menu.hide();
     menu.hidePaused();
     hud.hideEndScreen();
+    hud.hideKillcam();
     requestLock();
   }
 
   if (msg.phase === 'ended' && prevPhase === 'playing') {
     input.unlock();
+    hud.hideKillcam();
     hud.showEndScreen(state);
   }
 
@@ -417,6 +466,7 @@ function frame(now) {
   weapons.update(now);
   projectiles.update3D(now);
   nameTags.update();
+  damageNumbers.update();
 
   audio.updateListener();
 
