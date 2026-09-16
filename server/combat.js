@@ -1,5 +1,5 @@
 import { PLAYER } from '../shared/constants.js';
-import { STREAKS } from '../shared/protocol.js';
+import { STREAKS, GUN_GAME_ORDER } from '../shared/protocol.js';
 import { getWeapon } from '../shared/weapons.js';
 import { raycastSolids, expandStairs } from '../shared/collision.js';
 import * as players from './players.js';
@@ -23,7 +23,6 @@ export function handleShoot(shooter, dir, requestedWeaponId, opts = {}) {
 
   if (w.adminOnly && !shooter.isAdmin) return null;
 
-  // aimbot is admin only, and only trusted if the server agrees they're admin
   const aimbot = !!opts.aimbot && !!shooter.isAdmin;
 
   if (now - shooter.lastShotAt < w.fireRateMs) return null;
@@ -84,9 +83,8 @@ export function handleShoot(shooter, dir, requestedWeaponId, opts = {}) {
     }
 
     let worldT = w.range;
-    let worldHit = null;
     if (!aimbot) {
-      worldHit = raycastSolids(origin, d, w.range, solids);
+      const worldHit = raycastSolids(origin, d, w.range, solids);
       worldT = worldHit ? worldHit.t : w.range;
     }
 
@@ -109,12 +107,23 @@ export function handleShoot(shooter, dir, requestedWeaponId, opts = {}) {
   let killedFlag = false;
   let streakLabel = null;
   let limitFlag = false;
+  const hitDamageEvents = [];
 
   for (const { victim, damage, point } of hitsByVictim.values()) {
     const result = applyDamage(shooter, victim, damage);
     if (result.killed) killedFlag = true;
     if (result.streak) streakLabel = result.streak;
     if (result.hitLimit) limitFlag = true;
+
+    hitDamageEvents.push({
+      victimId: victim.id,
+      damage,
+      point,
+      health: victim.health,
+      killed: result.killed,
+      gunGameAdvanced: result.gunGameAdvanced,
+      gunGameFinished: result.gunGameFinished,
+    });
   }
 
   return {
@@ -128,12 +137,8 @@ export function handleShoot(shooter, dir, requestedWeaponId, opts = {}) {
     streak: streakLabel,
     hitLimit: limitFlag,
     projectile: null,
-    hits: [...hitsByVictim.values()].map(h => ({
-      victimId: h.victim.id,
-      damage: h.damage,
-      point: h.point,
-      health: h.victim.health,
-    })),
+    hits: hitDamageEvents,
+    playerId: shooter.id,
   };
 }
 
@@ -178,7 +183,7 @@ function raycastPlayers(origin, dir, shooter, maxT, weapon) {
 
   for (const p of players.getAll().values()) {
     if (p.id === shooter.id || !p.alive) continue;
-    if (shooter.team !== 'ffa' && p.team === shooter.team) continue;
+    if (game.isTeamMode() && p.team === shooter.team) continue;
 
     const hit = rayAABB(origin, dir, {
       x: p.x, y: p.y, z: p.z,
@@ -236,24 +241,37 @@ function rayAABB(o, d, box) {
 
 export function applyDamage(attacker, victim, dmg) {
   if (victim.godmode) {
-    return { killed: false, streak: null, hitLimit: false };
+    return { killed: false, streak: null, hitLimit: false, gunGameAdvanced: false, gunGameFinished: false };
   }
 
   victim.health -= dmg;
   victim.lastDamageAt = Date.now();
 
   if (victim.health > 0) {
-    return { killed: false, streak: null, hitLimit: false };
+    return { killed: false, streak: null, hitLimit: false, gunGameAdvanced: false, gunGameFinished: false };
   }
 
   victim.health = 0;
   victim.alive = false;
   victim.deaths++;
   victim.streak = 0;
+
+  // drop flag if carrying
+  if (victim.carryingFlag && game.getState().flags) {
+    const flag = game.getState().flags[victim.carryingFlag];
+    if (flag) {
+      flag.carriedBy = null;
+    }
+    victim.carryingFlag = null;
+  }
+
   attacker.kills++;
   attacker.streak = (attacker.streak || 0) + 1;
 
-  game.addKill(attacker.team);
+  // team kill (in team modes) or per-player kill
+  if (game.isTeamMode()) {
+    game.addKill(attacker.team);
+  }
 
   victim.respawnAt = Date.now() + PLAYER.RESPAWN_MS;
   victim.reloading = false;
@@ -262,9 +280,24 @@ export function applyDamage(attacker, victim, dmg) {
   victim.height = PLAYER.HEIGHT;
 
   const streakName = STREAKS[attacker.streak] || null;
+
+  // gun game progression
+  let gunGameAdvanced = false;
+  let gunGameFinished = false;
+  if (game.getState().mode === 'gungame') {
+    gunGameAdvanced = true;
+    gunGameFinished = players.advanceGunGame(attacker);
+  }
+
   const hitLimit = game.checkKillLimit(attacker);
 
-  return { killed: true, streak: streakName, hitLimit };
+  return {
+    killed: true,
+    streak: streakName,
+    hitLimit,
+    gunGameAdvanced,
+    gunGameFinished,
+  };
 }
 
 export function applyExplosionDamage(attacker, victim, dmg) {
