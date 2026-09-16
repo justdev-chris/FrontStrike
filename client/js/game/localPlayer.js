@@ -51,6 +51,11 @@ const local = {
 
   jumpBuffer: 0,
   coyote: 0,
+
+  spectateIndex: 0,
+  spectateTargetId: null,
+  spectateX: 0, spectateY: 0, spectateZ: 0,
+  spectateYaw: 0, spectatePitch: 0,
 };
 
 let cachedSolids = null;
@@ -96,12 +101,30 @@ export function spawn(playerData) {
   local.emote = null;
   local.emoteEndsAt = 0;
 
+  local.spectateIndex = 0;
+  local.spectateTargetId = null;
+
   weaponView.setWeapon(local.weaponId);
   syncCamera();
 }
 
+export function forceWeapon(weaponId) {
+  const w = getWeapon(weaponId);
+  if (!w) return;
+  local.weaponId = weaponId;
+  local.magAmmo = w.magSize;
+  local.reloading = false;
+  local.aiming = false;
+  local.recoilPitch = 0;
+  local.recoilYaw = 0;
+  weaponView.setWeapon(weaponId);
+}
+
 export function update(inputState, now) {
-  if (local.dead) return;
+  if (local.dead) {
+    handleSpectator(inputState, now);
+    return;
+  }
 
   if (local.emote) {
     const moving = Math.abs(inputState.forward) > 0.01 || Math.abs(inputState.right) > 0.01;
@@ -185,6 +208,48 @@ export function update(inputState, now) {
   state.sliding = local.sliding;
 }
 
+function handleSpectator(inputState, now) {
+  const others = [...state.players.values()].filter(p => p.id !== state.myId);
+
+  if (inputState.spectateNext && others.length > 0) {
+    local.spectateIndex = (local.spectateIndex + 1) % others.length;
+  }
+  if (inputState.spectatePrev && others.length > 0) {
+    local.spectateIndex = (local.spectateIndex - 1 + others.length) % others.length;
+  }
+
+  if (others.length === 0) {
+    state.spectatorTargetId = null;
+    syncCamera();
+    return;
+  }
+
+  if (local.spectateIndex >= others.length) local.spectateIndex = 0;
+  const target = others[local.spectateIndex];
+  state.spectatorTargetId = target.id;
+
+  // look around freely, but camera sits at target's eye position
+  local.spectateYaw   -= inputState.dx * 0.0022;
+  local.spectatePitch -= inputState.dy * 0.0022;
+  local.spectatePitch = clamp(local.spectatePitch, -1.5, 1.5);
+
+  const cam = getCamera();
+  cam.rotation.order = 'YXZ';
+
+  // eye offset
+  const eyeOffset = target.height / 2 - 0.1;
+  cam.position.set(target.x, target.y + eyeOffset, target.z);
+  cam.rotation.y = local.spectateYaw;
+  cam.rotation.x = local.spectatePitch;
+  cam.rotation.z = 0;
+
+  // default camera FOV
+  if (Math.abs(cam.fov - 80) > 0.1) {
+    cam.fov = 80;
+    cam.updateProjectionMatrix();
+  }
+}
+
 function handleWeaponInputs(inputState, now) {
   if (inputState.switchWeapon) {
     switchWeapon(inputState.switchWeapon);
@@ -210,6 +275,8 @@ function switchWeapon(slotId) {
   const w = getWeapon(slotId);
   if (!w) return;
   if (w.adminOnly && !state.isAdmin) return;
+  // in gun game, weapons are controlled by progression
+  if (state.mode === 'gungame') return;
 
   local.weaponId = slotId;
   local.magAmmo = w.magSize;
@@ -432,6 +499,22 @@ function step(inputState, moveMult, effYaw, now) {
 
   if (local.onGround) local.coyote = COYOTE_FRAMES;
   else local.coyote = Math.max(0, local.coyote - 1);
+
+  // jump pads
+  const map = state.map;
+  if (map && map.jumpPads) {
+    const feet = local.y - local.height / 2;
+    for (const pad of map.jumpPads) {
+      const pdx = local.x - pad.x;
+      const pdz = local.z - pad.z;
+      if (Math.abs(pdx) > 1.5) continue;
+      if (Math.abs(pdz) > 1.5) continue;
+      if (Math.abs(feet - pad.y) > 1.0) continue;
+      local.vy = pad.power;
+      local.onGround = false;
+      break;
+    }
+  }
 }
 
 function tickSlide(inputState, now) {
@@ -505,6 +588,12 @@ export function applySnapshot(players, ackedSeq) {
   state.godmode = !!me.godmode;
   state.speedMult = me.speedMult || 1;
   state.noReload = !!me.noReload;
+  state.gunGameIndex = me.gunGameIndex || 0;
+
+  // gun game — snap to correct weapon if the client is out of sync
+  if (state.mode === 'gungame' && me.weaponId && me.weaponId !== local.weaponId) {
+    forceWeapon(me.weaponId);
+  }
 
   if (!me.alive) return;
 
@@ -584,11 +673,17 @@ export function onDeath() {
   local.coyote = 0;
   local.sliding = false;
   local.height = PLAYER.HEIGHT;
+
+  // start spectating the first other player
+  local.spectateIndex = 0;
+  local.spectateYaw = local.yaw;
+  local.spectatePitch = local.pitch;
 }
 
 export function onRespawn(playerData) {
   spawn(playerData);
   state.alive = true;
+  state.spectatorTargetId = null;
 }
 
 function approach(current, target, rate) {
